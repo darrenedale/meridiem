@@ -20,4 +20,15 @@ final class UnixEpoch
     public const int Millisecond = 0;
 
     public const Weekday Weekday = Weekday::Thursday;
+
+    public static function dateTime(): DateTime
+    {
+        static $epoch = null;
+
+        if (null === $epoch) {
+            $epoch = DateTime::create(self::Year, self::Month, self::Day, self::Hour, self::Minute, self::Second, self::Millisecond);
+        }
+
+        return $epoch;
+    }
 }
