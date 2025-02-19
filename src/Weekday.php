@@ -19,7 +19,7 @@ enum Weekday: int
         return $this->value < $weekday->value;
     }
 
-    /** Determine if this Weekday is before after in the week. */
+    /** Determine if this Weekday is after another in the week. */
     public function isAfter(Weekday $weekday): bool
     {
         return $weekday->value < $this->value;

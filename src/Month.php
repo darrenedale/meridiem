@@ -27,4 +27,26 @@ enum Month: int
             default => 31,
         };
     }
+
+    /** Determine if this Month is before another in the year\. */
+    public function isBefore(Month $month): bool
+    {
+        return $this->value < $month->value;
+    }
+
+    /** Determine if this Month is after another in the year. */
+    public function isAfter(Month $month): bool
+    {
+        return $month->value < $this->value;
+    }
+
+    public function next(): Month
+    {
+        return self::from(1 + (($this->value) % 12));
+    }
+
+    public function previous(): Month
+    {
+        return self::from(1 +(($this->value + 10) % 12));
+    }
 }
