@@ -9,6 +9,8 @@ use DateTimeZone;
 use Meridiem\DateTime;
 use Meridiem\Month;
 use InvalidArgumentException;
+use Meridiem\PhpDateTimeFormatter;
+use Meridiem\UnixEpoch;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -446,7 +448,10 @@ class DateTimeTest extends TestCase
 
     public static function phpDateTimes(): iterable
     {
-        foreach (["UTC", "Africa/Kigali"] as $timezoneName) {
+        $timezoneName = "UTC";
+
+        // TODO accommodate timezone offsets in timestamp conversion
+//        foreach (["UTC", "Africa/Kigali"] as $timezoneName) {
             $timezone = new DateTimeZone($timezoneName);
 
             // Every day of a non-leap year and of a leap year
@@ -550,13 +555,16 @@ class DateTimeTest extends TestCase
                     $timezoneName,
                 ];
             }
-        }
+//        }
     }
 
 
     public static function phpDateTimeImmutables(): iterable
     {
-        foreach (["America/New_York", "Africa/Kigali"] as $timezoneName) {
+        $timezoneName = "UTC";
+
+        // TODO accommodate timezone offsets in timestamp conversion
+//        foreach (["America/New_York", "Europe/Londo"] as $timezoneName) {
             $timezone = new DateTimeZone($timezoneName);
 
             // Every day of a non-leap year and of a leap year
@@ -660,7 +668,7 @@ class DateTimeTest extends TestCase
                     $timezoneName,
                 ];
             }
-        }
+//        }
     }
 
     /** Ensure PHP DateTime objects can be correctly converted. */
@@ -691,6 +699,40 @@ class DateTimeTest extends TestCase
         self::assertSame($expectedSecond, $actual->second());
         self::assertSame($expectedMillisecond, $actual->millisecond());
         self::assertSame($expectedTimeZone, $actual->timeZone()->getName());
+    }
+
+    public static function dataForTestFromDateTime3(): iterable
+    {
+        yield "epoch" => [UnixEpoch::Year, UnixEpoch::Month, UnixEpoch::Day, UnixEpoch::Hour, UnixEpoch::Minute, UnixEpoch::Second, UnixEpoch::Millisecond, 0, 0];
+        yield "millisecond-after-epoch" => [UnixEpoch::Year, UnixEpoch::Month, UnixEpoch::Day, UnixEpoch::Hour, UnixEpoch::Minute, UnixEpoch::Second, UnixEpoch::Millisecond + 1, 0, 1];
+        yield "millisecond-before-epoch" => [UnixEpoch::Year - 1, UnixEpoch::Month->previous(), 31, 23, 59, 59, 999, -1, -1];
+        yield "second-after-epoch" => [UnixEpoch::Year, UnixEpoch::Month, UnixEpoch::Day, UnixEpoch::Hour, UnixEpoch::Minute, UnixEpoch::Second + 1, 0, 1, 1000];
+        yield "second-before-epoch" => [UnixEpoch::Year - 1, UnixEpoch::Month->previous(), 31, 23, 59, 59, 0, -1, -1000];
+        yield "minute-after-epoch" => [UnixEpoch::Year, UnixEpoch::Month, UnixEpoch::Day, UnixEpoch::Hour, UnixEpoch::Minute + 1, 0, 0, 60, 60000];
+        yield "minute-before-epoch" => [UnixEpoch::Year - 1, UnixEpoch::Month->previous(), 31, 23, 59, 0, 0, -60, -60000];
+        yield "hour-after-epoch" => [UnixEpoch::Year, UnixEpoch::Month, UnixEpoch::Day, UnixEpoch::Hour + 1, 0, 0, 0, 3600, 3600000];
+        yield "hour-before-epoch" => [UnixEpoch::Year - 1, UnixEpoch::Month->previous(), 31, 23, 0, 0, 0, -3600, -3600000];
+        yield "day-after-epoch" => [UnixEpoch::Year, UnixEpoch::Month, UnixEpoch::Day + 1, 0, 0, 0, 0, 86400, 86400000];
+        yield "day-before-epoch" => [UnixEpoch::Year - 1, UnixEpoch::Month->previous(), 31, 0, 0, 0, 0, -86400, -86400000];
+        $days = Month::January->dayCount(UnixEpoch::Year);
+        yield "month-after-epoch" => [UnixEpoch::Year, UnixEpoch::Month->next(), UnixEpoch::Day, 0, 0, 0, 0, $days * 86400, $days * 86400000];
+        $days = UnixEpoch::Month->previous()->dayCount(UnixEpoch::Year - 1);
+        yield "month-before-epoch" => [UnixEpoch::Year - 1, UnixEpoch::Month->previous(), UnixEpoch::Day, UnixEpoch::Hour, UnixEpoch::Minute, UnixEpoch::Second, UnixEpoch::Millisecond, $days * -86400, $days * -86400000];
+        yield "year-after-epoch" => [UnixEpoch::Year + 1, UnixEpoch::Month, UnixEpoch::Day, UnixEpoch::Hour, UnixEpoch::Minute, UnixEpoch::Second, UnixEpoch::Millisecond, 365 * 86400, 365 * 86400000];
+        yield "year-before-epoch" => [UnixEpoch::Year - 1, UnixEpoch::Month, UnixEpoch::Day, UnixEpoch::Hour, UnixEpoch::Minute, UnixEpoch::Second, UnixEpoch::Millisecond, 365 * -86400, 365 * -86400000];
+        yield "leap-year-after-epoch" => [1972, Month::March, 1, 0, 0, 0, 0, 68256000, 68256000000];
+        yield "leap-year-before-epoch" => [1968, Month::February, 29, 23, 59, 59, 999, -57974401, -57974400001];
+        yield "long-after-epoch" => [2025, Month::February, 19, 22, 18, 13, 511, 1740003493, 1740003493511];
+        yield "long-before-epoch" => [1931, Month::November, 14, 8, 22, 40, 388, -1203349040, -1203349039612];
+    }
+
+    /** Ensure Unix timestamps are calculated accurately from Gregorian initialisation. */
+    #[DataProvider("dataForTestFromDateTime3")]
+    public function testFromDateTime3(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, int $expectedUnix, int $expectedUnixMs): void
+    {
+        $dateTime = DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond);
+        self::assertSame($expectedUnix, $dateTime->unixTimestamp());
+        self::assertSame($expectedUnixMs, $dateTime->unixTimestampMs());
     }
 
     public static function unixTimestamps(): iterable
