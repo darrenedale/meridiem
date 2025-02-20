@@ -2,7 +2,6 @@
 
 namespace Meridiem\Contracts;
 
-use DateTimeZone;
 use Meridiem\Month;
 use Meridiem\Weekday;
 
@@ -24,7 +23,7 @@ interface DateTime
 
     public function millisecond(): int;
 
-    public function timeZone(): DateTimeZone;
+    public function timeZone(): TimeZone;
 
     public function unixTimestamp(): int;
 

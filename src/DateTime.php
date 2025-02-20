@@ -2,13 +2,14 @@
 
 namespace Meridiem;
 
-use DateTime as PhpDateTime;
 use DateTimeInterface as PhpDateTimeInterface;
 use DateTimeZone;
 use InvalidArgumentException;
 use LogicException;
 use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\Contracts\DateTimeComparison as DateTimeComparisonContract;
+use Meridiem\Contracts\TimeZone as TimeZoneContract;
+use Meridiem\TimeZone;
 
 /**
  * Representation of a point in time in the Gregorian calendar.
@@ -44,22 +45,6 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
 
     private const int MaxMillisecond = 999;
 
-    private const int EpochYear = 1970;
-
-    private const Month EpochMonth = Month::January;
-
-    private const int EpochDay = 1;
-
-    private const Weekday EpochWeekday = Weekday::Thursday;
-
-    private const int EpochHour = 0;
-
-    private const int EpochMinute = 0;
-
-    private const int EpochSecond = 0;
-
-    private const int EpochMillisecond = 0;
-
     // How many ms in other units
     private const int MillisecondsPerSecond = 1000;
     
@@ -71,13 +56,13 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
 
     private const int MillisecondsPerYear = self::MillisecondsPerDay * 365;
 
-    // Unix timestamp is clean
+    // When Unix timestamp is clean
     private const int CleanUnix = 0x01;
 
-    // Gregorian date-time is clean
+    // When Gregorian date-time is clean
     private const int CleanGregorian = 0x02;
 
-    // Both are clean
+    // When Both are clean
     private const int CleanBoth = 0x03;
 
     private int $unixMs;
@@ -96,12 +81,12 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
 
     private int $millisecond;
 
-    private DateTimeZone $timeZone;
+    private TimeZoneContract $timeZone;
 
     // What state is currently clean - always one of the clean constants Unix/Gregorian/Both
     private int $clean;
 
-    protected function __construct(int $yearOrUnixMs, ?Month $month = null, ?int $day = null, ?int $hour = null, ?int $minute = null, ?int $second = null, ?int $millisecond = 0, ?DateTimeZone $timeZone = null)
+    protected function __construct(int $yearOrUnixMs, ?Month $month = null, ?int $day = null, ?int $hour = null, ?int $minute = null, ?int $second = null, ?int $millisecond = 0, ?TimeZoneContract $timeZone = null)
     {
         if (null === $month) {
             $this->unixMs = $yearOrUnixMs;
@@ -112,7 +97,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             $this->minute = 0;
             $this->second = 0;
             $this->millisecond = 0;
-            $this->timeZone = new DateTimeZone(self::DefaultTimeZone);
+            $this->timeZone = TimeZone::lookup(self::DefaultTimeZone);
             $this->clean = self::CleanUnix;
         } else {
             assert(self::MinYear <= $yearOrUnixMs && self::MaxYear >= $yearOrUnixMs, new InvalidArgumentException("Expected year between -9999 and 9999 inclusive, found {$yearOrUnixMs}"));
@@ -129,7 +114,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             $this->minute = $minute ?? 0;
             $this->second = $second ?? 0;
             $this->millisecond = $millisecond ?? 0;
-            $this->timeZone = ($timeZone ? clone $timeZone : new DateTimeZone(self::DefaultTimeZone));
+            $this->timeZone = ($timeZone ? clone $timeZone : TimeZone::lookup(self::DefaultTimeZone));
             $this->unixMs = 0;
             $this->clean = self::CleanGregorian;
         }
@@ -252,25 +237,153 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             $this->unixMs = $this->millisecondsFromEpoch();
         }
 
-        $this->clean = self::CleanBoth;
+        $this->clean |= self::CleanUnix;
+    }
+
+    protected final function adjustGregorianForTimeZoneOffset(): void
+    {
+        $timeZone = $this->timeZone;
+        $this->timeZone = TimeZone::lookup("UTC");
+        $offset = $timeZone->offset($this);
+
+        $addHours = function(int $hours): void
+        {
+            $this->hour += $hours;
+
+            if (0 > $this->hour) {
+                --$this->day;
+
+                if (1 > $this->day) {
+                    $this->month = $this->month->previous();
+
+                    if (Month::December === $this->month) {
+                        --$this->year;
+                    }
+
+                    $this->day = $this->month->dayCount($this->year);
+                }
+
+                $this->hour += 24;
+            } else if (self::MaxHour < $this->hour) {
+                $this->hour -= 24;
+                ++$this->day;
+
+                if ($this->month->dayCount($this->year) < $this->day) {
+                    $this->day = 1;
+                    $this->month = $this->month->next();
+
+                    if (Month::January === $this->month) {
+                        ++$this->year;
+                    }
+                }
+            }
+        };
+
+        $addMinutes = function(int $minutes) use ($addHours): void
+        {
+            // offset minutes are never more than an hour
+            $this->minute += $minutes;
+
+            if (0 > $this->minute) {
+                $this->minute += 60;
+                $addHours(-1);
+            } else if (self::MaxMinute < $this->minute) {
+                $this->minute -= 60;
+                $addHours(1);
+            }
+        };
+
+        $addHours($offset->hours());
+        $addMinutes($offset->minutes());
     }
 
     /** Helper to bring the Gregorian calendar properties into sync with the Unix timestamp. */
     protected final function syncGregorian(): void
     {
-        // TODO don't rely on PhpDateTime, implement the algorithm on the ms timestamp directly
-        $dateTime = PhpDateTime::createFromFormat("U", (string) (int) floor($this->unixMs / self::MillisecondsPerSecond), $this->timeZone);
-        $this->year = (int) $dateTime->format("Y");
-        $this->month = Month::from((int) $dateTime->format("n"));
-        $this->day = (int) $dateTime->format("j");
-        $this->hour = (int) $dateTime->format("H");
-        $this->minute = (int) $dateTime->format("i");
-        $this->second = (int) $dateTime->format("s");
+        $ms = $this->unixMs;
+        $year = UnixEpoch::Year;
+        $month = UnixEpoch::Month;
+        $day = UnixEpoch::Day;
+        $hour = UnixEpoch::Hour;
+        $minute = UnixEpoch::Minute;
+        $second = UnixEpoch::Second;
+        $millisecond = UnixEpoch::Millisecond;
 
-        $millisecond = $this->unixMs % 1000;
-        $this->millisecond = (0 > $millisecond ? 1000 + $millisecond : $millisecond);
+        if (0 < $ms) {
+            do {
+                $yearMs = self::MillisecondsPerYear + (self::isLeapYear($year) ? self::MillisecondsPerDay : 0);
 
-        $this->clean = self::CleanBoth;
+                if ($ms < $yearMs) {
+                    break;
+                }
+
+                ++$year;
+                $ms -= $yearMs;
+            } while (true);
+
+            foreach (Month::cases() as $iMonth) {
+                $monthMs = (self::MillisecondsPerDay * $iMonth->dayCount($year));
+
+                if ($ms < $monthMs) {
+                    break;
+                }
+
+                $month = $iMonth;
+                $ms -= $monthMs;
+            }
+
+            $day = 1 + (int) floor($ms / self::MillisecondsPerDay);
+            $ms %= self::MillisecondsPerDay;
+            $hour = (int) floor($ms / self::MillisecondsPerHour);
+            $ms %= self::MillisecondsPerHour;
+            $minute = (int) floor($ms / self::MillisecondsPerMinute);
+            $ms %= self::MillisecondsPerMinute;
+            $second = (int) floor($ms / self::MillisecondsPerSecond);
+            $millisecond = $ms % self::MillisecondsPerSecond;
+        } else if (0 > $ms) {
+            $ms = -$ms;
+
+            do {
+                --$year;
+                $yearMs = self::MillisecondsPerYear + (self::isLeapYear($year) ? self::MillisecondsPerDay : 0);
+
+                if ($ms < $yearMs) {
+                    break;
+                }
+
+                $ms -= $yearMs;
+            } while (true);
+
+            foreach (array_reverse(Month::cases()) as $iMonth) {
+                $month = $iMonth;
+                $monthMs = (self::MillisecondsPerDay * $iMonth->dayCount($year));
+
+                if ($ms < $monthMs) {
+                    break;
+                }
+
+                $ms -= $monthMs;
+            }
+
+            $day = $month->dayCount($year) - (int) floor($ms / self::MillisecondsPerDay);
+            $ms %= self::MillisecondsPerDay;
+            $hour = self::MaxHour - (int) floor($ms / self::MillisecondsPerHour);
+            $ms %= self::MillisecondsPerHour;
+            $minute = self::MaxMinute - (int) floor($ms / self::MillisecondsPerMinute);
+            $ms %= self::MillisecondsPerMinute;
+            $second = self::MaxSecond - (int) floor($ms / self::MillisecondsPerSecond);
+            $millisecond = self::MillisecondsPerSecond - ($ms % self::MillisecondsPerSecond);
+        }
+
+        $this->year = $year;
+        $this->month = $month;
+        $this->day = $day;
+        $this->hour = $hour;
+        $this->minute = $minute;
+        $this->second = $second;
+        $this->millisecond = $millisecond;
+        $this->adjustGregorianForTimeZoneOffset();
+        $this->clean |= self::CleanGregorian;
     }
 
     /**
@@ -383,7 +496,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     public function weekday(): Weekday
     {
         $daysSinceEpoch = (int) floor($this->unixTimestampMs() / self::MillisecondsPerDay);
-        $weekday = (self::EpochWeekday->value + $daysSinceEpoch) % 7;
+        $weekday = (UnixEpoch::Weekday->value + $daysSinceEpoch) % 7;
         return Weekday::from($weekday);
     }
 
@@ -541,7 +654,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
      *
      * @return DateTime the DateTime with the new timezone.
      */
-    public function withTimeZone(DateTimeZone $timeZone): static
+    public function withTimeZone(TimeZoneContract $timeZone): static
     {
         if (!$this->isUnixClean()) {
             $this->syncUnix();
@@ -549,12 +662,11 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
 
         $clone = clone $this;
         $clone->timeZone = $timeZone;
-        $clone->clean = self::CleanUnix;
         return $clone;
     }
 
     /** Fetch the timezone for the point in time. */
-    public function timeZone(): DateTimeZone
+    public function timeZone(): TimeZoneContract
     {
         return $this->timeZone;
     }

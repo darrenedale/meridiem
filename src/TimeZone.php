@@ -13,20 +13,24 @@ class TimeZone implements TimeZoneContract
     /** @var TimeZoneTransition[] */
     private array $transitions;
 
-    private function __construct(string $name, array $transitions = [])
+    private UtcOffset $baseOffset;
+
+    private function __construct(string $name, UtcOffset $baseOffset, array $transitions = [])
     {
         $this->name = $name;
+        // TODO clone transitions
         $this->transitions = $transitions;
+        $this->baseOffset = clone $baseOffset;
     }
 
     public function name(): string
     {
-        // TODO: Implement name() method.
+        return $this->name;
     }
 
     public function offset(DateTime $asAt): UtcOffset
     {
-        // TODO: Implement offset() method.
+        return $this->baseOffset;
     }
 
     public function currentOffset(bool $dst = false): UtcOffset
@@ -37,13 +41,13 @@ class TimeZone implements TimeZoneContract
 
     public function hasTransitions(): bool
     {
-        // TODO: Implement hasTransitions() method.
+        return 0 < count($this->transitions);
     }
 
     /** @return TimeZoneTransition[] */
     public function transitions(): array
     {
-        // TODO: Implement transitions() method.
+        return $this->transitions;
     }
 
     public static function parse(string $timeZone): TimeZone
@@ -53,6 +57,8 @@ class TimeZone implements TimeZoneContract
 
     public static function lookup(string $timeZoneName): TimeZone
     {
-        // TODO: Implement transitions() method.
+        return match ($timeZoneName) {
+            "UTC" => new self("UTC", new UtcOffset(0, 0)),
+        };
     }
 }
