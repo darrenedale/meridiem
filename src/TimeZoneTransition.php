@@ -3,7 +3,6 @@
 namespace Meridiem;
 
 use InvalidArgumentException;
-use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\Contracts\TimeZoneTransitionDay;
 
 /** Defines when a timezone transition(s|ed) between SDT and DST. */
@@ -31,10 +30,10 @@ class TimeZoneTransition
     /** @var int The hour at which the transition occur(s|red). */
     private int $hour;
 
-    /** @var UtcOffset The offset from UTC after the transition. */
-    private UtcOffset $utcOffset;
+    /** @var int The number of minutes of daylight saving, compared to the timezone's base offset. */
+    private int $savingMinutes;
 
-    public function __construct(int $fromYear, int $toYear, Month $month, int|TimeZoneTransitionDay $day, int $hour, UtcOffset $utcOffset)
+    public function __construct(int $fromYear, int $toYear, Month $month, int|TimeZoneTransitionDay $day, int $hour, int $savingMinutes)
     {
         assert ($fromYear >= $toYear, new InvalidArgumentException("Expected to year on or after from year, found from {$fromYear} and to {$toYear}"));
         $this->fromYear = $fromYear;
@@ -42,7 +41,7 @@ class TimeZoneTransition
         $this->month = $month;
         $this->day = $day;
         $this->hour = $hour;
-        $this->utcOffset = $utcOffset;
+        $this->savingMinutes = $savingMinutes;
     }
 
     public function fromYear(): int
@@ -88,16 +87,16 @@ class TimeZoneTransition
         return (is_int($transitionDay) ? $transitionDay : $transitionDay->dayFor($year, $this->month()));
     }
 
-    public function utcOffset(): UtcOffset
+    public function savingMinutes(): int
     {
-        return $this->utcOffset;
+        return $this->savingMinutes;
     }
 
-    public function appliesTo(DateTimeContract $dateTime): bool
+    public function applyToOffset(UtcOffset $offset): UtcOffset
     {
-        return $this->fromYear() <= $dateTime->year()
-            && $this->toYear() >= $dateTime->year()
-            && $this->month()->value <= $dateTime->month()->value
-            ;
+        return new UtcOffset(
+            $offset->hours() + (int) floor($this->savingMinutes / 60),
+            $offset->minutes() + $this->savingMinutes % 60,
+        );
     }
 }

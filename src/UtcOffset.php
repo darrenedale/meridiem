@@ -63,7 +63,7 @@ class UtcOffset
         return self::MillisecondsPerHour * $this->hours() + self::MillisecondsPerMinute * $this->minutes();
     }
 
-    public function parse(string $offset): self
+    public static function parse(string $offset): self
     {
         if (!preg_match($offset, "/^(+-)(\d{2}):?(\d{2})\$/", $captures)) {
             throw new InvalidArgumentException("Expected valid timezone offset, found \"{$offset}\"");

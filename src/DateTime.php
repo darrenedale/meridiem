@@ -243,7 +243,6 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     protected final function adjustGregorianForTimeZoneOffset(): void
     {
         $timeZone = $this->timeZone;
-        $this->timeZone = TimeZone::lookup("UTC");
         $offset = $timeZone->offset($this);
 
         $addHours = function(int $hours): void
