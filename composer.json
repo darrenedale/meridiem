@@ -26,7 +26,10 @@
     "autoload": {
         "psr-4": {
             "Meridiem\\": "src"
-        }
+        },
+        "files": [
+            "src/functions.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
