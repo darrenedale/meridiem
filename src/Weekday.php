@@ -36,7 +36,17 @@ enum Weekday: int
     public function back(int $days): Weekday
     {
         assert(0 <= $days, "Expected days >= 0, found {$days}");
-        return Weekday::from((7 + $this->value - ($days % 7)) % 7);
+        return $this->advance(7 - ($days % 7));
+    }
+
+    public function next(): Weekday
+    {
+        return $this->advance(1);
+    }
+
+    public function previous(): Weekday
+    {
+        return $this->back(1);
     }
 
     /** Count the number of days forward from this day to another. */

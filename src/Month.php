@@ -40,13 +40,41 @@ enum Month: int
         return $month->value < $this->value;
     }
 
+    public function advance(int $months): Month
+    {
+        assert(0 <= $months, "Expected months >= 0, found {$months}");
+        return self::from(1 + ($months + $this->value - 1) % 12);
+    }
+
+    public function back(int $months): Month
+    {
+        assert(0 <= $months, "Expected months >= 0, found {$months}");
+        return $this->advance(12 - ($months % 12));
+    }
+
     public function next(): Month
     {
-        return self::from(1 + (($this->value) % 12));
+        return $this->advance(1);
     }
 
     public function previous(): Month
     {
-        return self::from(1 +(($this->value + 10) % 12));
+        return $this->back(1);
+    }
+
+    /** Count the number of months forward from this month to another. */
+    public function distanceTo(Month $month): int
+    {
+        if ($this->isAfter($month)) {
+            return (12 + $month->value) - $this->value;
+        }
+
+        return $month->value - $this->value;
+    }
+
+    /** Count the number of months forward from another month to this month. */
+    public function distanceFrom(Month $month): int
+    {
+        return $month->distanceTo($this);
     }
 }
