@@ -6,7 +6,6 @@ use InvalidArgumentException;
 use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\Contracts\TimeZone as TimeZoneContract;
 use Meridiem\Contracts\TimeZoneTransitionDay;
-use RuntimeException;
 
 /** TODO very much a WIP ATM */
 class TimeZone implements TimeZoneContract
@@ -20,15 +19,13 @@ class TimeZone implements TimeZoneContract
     private UtcOffset $sdtOffset;
 
     /**
-     *
      * @param string $name
-     * @param array|null $transitions Transitions are required to be ordered chronologically by fromYear().
+     * @param UtcOffset $sdtOffset The standard offset from UTC for the timezone.
+     * @param TimeZoneTransition[] $transitions Transitions indicating when DST starts/stops for the timezone.
      */
-    private function __construct(string $name, UtcOffset $sdtOffset, ?array $transitions = null)
+    private function __construct(string $name, UtcOffset $sdtOffset, array $transitions = [])
     {
-        $transitions ??= [new TimeZoneTransition(-9999, TimeZoneTransition::YearOngoing, Month::January, 1, 0, 0)];
-        assert(0 < count($transitions), new InvalidArgumentException("Expected at least one transition, found none"));
-        assert(all($transitions, static fn(mixed $transition): bool => $transition instanceof TimeZoneTransitionDay), new InvalidArgumentException("Expected array of TimeZoneTransitionDay objects"));
+        assert(all($transitions, static fn(mixed $transition): bool => $transition instanceof TimeZoneTransition), new InvalidArgumentException("Expected array of TimeZoneTransition objects"));
         $this->name = $name;
         $this->sdtOffset = $sdtOffset;
         $this->transitions = cloneAll($transitions);
@@ -70,46 +67,7 @@ class TimeZone implements TimeZoneContract
      */
     public function offset(DateTimeContract $asAt): UtcOffset
     {
-        $transitions = $this->transitionsFor($asAt->year());
-
-        if (0 === count($transitions)) {
-            return $this->sdtOffset;
-        }
-
-        // iterating in reverse chronological order makes it easier to identify the one that applies
-        for ($idx = count($transitions) - 1; $idx >= 0; --$idx) {
-            $transition = $transitions[$idx];
-
-            if ($transition->month() < $asAt->month()) {
-                break;
-            }
-
-            if ($transition->month() === $asAt->month()) {
-                $transitionDay = $transition->day();
-                $transitionDay = ($transitionDay instanceof TimeZoneTransitionDay ? $transitionDay->dayFor($asAt->year(), $asAt->month()) : $transitionDay);
-
-                if ($transitionDay < $asAt->day()) {
-                    break;
-                }
-
-                if ($transitionDay === $asAt->day() && $transition->hour() <= $asAt->hour()) {
-                    break;
-                }
-            }
-        }
-
-        if (-1 === $idx) {
-            // if none of the transitions from the year apply, we need the last one from the previous year
-            $transitions = $this->transitionsFor($asAt->year() - 1);
-
-            if (0 === count($transitions)) {
-                return $this->sdtOffset;
-            }
-
-            $transition = last($transitions);
-        }
-
-        return $transition->applyToOffset($this->sdtOffset());
+        return $this->effectiveTransition($asAt)?->applyToOffset($this->sdtOffset()) ?? $this->sdtOffset();
     }
 
     public function currentOffset(): UtcOffset
@@ -128,6 +86,50 @@ class TimeZone implements TimeZoneContract
         return $this->transitions;
     }
 
+    public function effectiveTransition(DateTimeContract $asAt): ?TimeZoneTransition
+    {
+        $transitions = $this->transitionsFor($asAt->year());
+
+        if (0 === count($transitions)) {
+            return null;
+        }
+
+        // iterating in reverse chronological order makes it easier to identify the one that applies
+        for ($idx = count($transitions) - 1; $idx >= 0; --$idx) {
+            $transition = $transitions[$idx];
+
+            if ($transition->month() < $asAt->month()) {
+                return $transition;
+            }
+
+            if ($transition->month() === $asAt->month()) {
+                $transitionDay = $transition->day();
+                $transitionDay = ($transitionDay instanceof TimeZoneTransitionDay ? $transitionDay->dayFor($asAt->year(), $asAt->month()) : $transitionDay);
+
+                if ($transitionDay < $asAt->day()) {
+                    return $transition;
+                }
+
+                if ($transitionDay === $asAt->day() && $transition->hour() <= $asAt->hour()) {
+                    return $transition;
+                }
+            }
+        }
+
+        if (-1 !== $idx) {
+            return $transition;
+        }
+
+        // if none of the transitions from the year apply, we need the last one from the previous year
+        $transitions = $this->transitionsFor($asAt->year() - 1);
+
+        if (0 < count($transitions)) {
+            return last($transitions);
+        }
+
+        return null;
+    }
+
     public static function parse(string $timeZone): TimeZone
     {
         return new TimeZone($timeZone, UtcOffset::parse($timeZone));
@@ -137,6 +139,8 @@ class TimeZone implements TimeZoneContract
     {
         return match ($timeZoneName) {
             "UTC" => new self("UTC", new UtcOffset(0, 0)),
+            "America/New_York" => new self("America/New_York", new UtcOffset(0, 0)),
+            "Europe/London" => new self("Europe/London", new UtcOffset(0, 0)),
         };
     }
 }

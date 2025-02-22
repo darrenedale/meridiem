@@ -35,7 +35,7 @@ class TimeZoneTransition
 
     public function __construct(int $fromYear, int $toYear, Month $month, int|TimeZoneTransitionDay $day, int $hour, int $savingMinutes)
     {
-        assert ($fromYear >= $toYear, new InvalidArgumentException("Expected to year on or after from year, found from {$fromYear} and to {$toYear}"));
+        assert($fromYear <= $toYear, new InvalidArgumentException("Expected to year on or after from year, found from {$fromYear} and to {$toYear}"));
         $this->fromYear = $fromYear;
         $this->toYear = $toYear;
         $this->month = $month;

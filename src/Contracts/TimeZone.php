@@ -2,6 +2,7 @@
 
 namespace Meridiem\Contracts;
 
+use Meridiem\TimeZoneTransition;
 use Meridiem\UtcOffset;
 
 interface TimeZone
@@ -17,4 +18,6 @@ interface TimeZone
     public function hasTransitions(): bool;
 
     public function transitions(): array;
+
+    public function effectiveTransition(DateTime $asAt): ?TimeZoneTransition;
 }

@@ -7,16 +7,6 @@ use InvalidArgumentException;
 /** Representation of an offset from UTC.*/
 class UtcOffset
 {
-    private const int MillisecondsPerSecond = 1000;
-
-    private const int MillisecondsPerMinute = 60 * self::MillisecondsPerSecond;
-
-    private const int MillisecondsPerHour = 60 * self::MillisecondsPerMinute;
-
-    private const int SecondsPerMinute = 60;
-
-    private const int SecondsPerHour = 60 * self::SecondsPerMinute;
-
     private int $hours;
 
     private int $minutes;
@@ -27,7 +17,6 @@ class UtcOffset
         assert(0 === $hours || 0 === $minutes || (0 > $hours === 0 > $minutes), new InvalidArgumentException("Expected hours and minutes with compatible signed, found {$hours} and {$minutes}"));
         assert(-60 < $minutes && 60 > $minutes, new InvalidArgumentException("Expected minutes between -59 and 59 inclusive, found {$minutes}"));
 
-        // TODO can we assert range of $hours?
         $this->hours = $hours;
         $this->minutes = $minutes;
     }
@@ -39,7 +28,7 @@ class UtcOffset
 
     public function minutes(): int
     {
-        return $this->hours;
+        return $this->minutes;
     }
 
     public function offset(bool $includeColon = false): string
@@ -55,17 +44,17 @@ class UtcOffset
 
     public function offsetSeconds(): int
     {
-        return self::SecondsPerHour * $this->hours() + self::SecondsPerMinute * $this->minutes();
+        return GregorianRatios::SecondsPerHour * $this->hours() + GregorianRatios::SecondsPerMinute * $this->minutes();
     }
 
     public function offsetMilliseconds(): int
     {
-        return self::MillisecondsPerHour * $this->hours() + self::MillisecondsPerMinute * $this->minutes();
+        return (GregorianRatios::MillisecondsPerHour * $this->hours()) + (GregorianRatios::MillisecondsPerMinute * $this->minutes());
     }
 
     public static function parse(string $offset): self
     {
-        if (!preg_match($offset, "/^(+-)(\d{2}):?(\d{2})\$/", $captures)) {
+        if (!preg_match("/^([+-])(\d{2}):?(\d{2})\$/", $offset, $captures)) {
             throw new InvalidArgumentException("Expected valid timezone offset, found \"{$offset}\"");
         }
 
@@ -76,6 +65,6 @@ class UtcOffset
             $minutes = -$minutes;
         }
 
-        return new self($hours, $minutes);
+        return new self((int) $hours, (int) $minutes);
     }
 }

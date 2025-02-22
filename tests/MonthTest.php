@@ -3,9 +3,11 @@
 namespace MeridiemTests;
 
 use Meridiem\Month;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(Month::class)]
 class MonthTest extends TestCase
 {
     /** All months. */
@@ -178,6 +180,7 @@ class MonthTest extends TestCase
         yield 'november-december' => [Month::November, Month::December];
     }
 
+    /** The first 6 multiples of 12. */
     public static function multiplesOfTwelve(): iterable
     {
         for ($factor = 0; $factor < 5; ++$factor) {
@@ -186,7 +189,7 @@ class MonthTest extends TestCase
         }
     }
 
-    /** Each Month paired with the Month 1 month after it. */
+    /** Each Month paired with the Month following it. */
     public static function monthsAdvancedOne(): iterable
     {
         yield "january-advanced-one" => [Month::January, Month::February];
@@ -288,7 +291,7 @@ class MonthTest extends TestCase
         yield "december-advanced-six" => [Month::December, Month::June];
     }
 
-    /** Each Month paired with the Month 6 months after it. */
+    /** Each Month paired with the Month 7 months after it. */
     public static function monthsAdvancedSeven(): iterable
     {
         yield "january-advanced-seven" => [Month::January, Month::August];
@@ -373,7 +376,7 @@ class MonthTest extends TestCase
         yield "december-advanced-eleven" => [Month::December, Month::November];
     }
 
-    /** Each Month paired with the Month 1 month before it. */
+    /** Each Month paired with the Month preceding it. */
     public static function monthsBackOne(): iterable
     {
         foreach (self::monthsAdvancedEleven() as $key => $months) {
@@ -453,7 +456,7 @@ class MonthTest extends TestCase
         }
     }
 
-    /** Each Month paired with the Month 6 months before it. */
+    /** Each Month paired with the Month 11 months before it. */
     public static function monthsBackEleven(): iterable
     {
         foreach (self::monthsAdvancedOne() as $key => $months) {
@@ -524,48 +527,70 @@ class MonthTest extends TestCase
         }
     }
 
-    /**
-     * TODO adjust for month count (these are the test values for Weekdays)
-     * All days back between 1 and 6 days, 8 and 13 days, 15 and 20 days, ... 
-     */
+    /** All months back between 1 and 11 months, 13 and 23 months, 25 and 35 months, ... */
     public static function monthsBack(): iterable
     {
         foreach (self::multiplesOfTwelve() as $multipleKey => $multiple) {
             $multiple = $multiple[0];
 
-            // all days advanced 1, 8, 15, ...
+            // all months back 1, 13, 25, ...
             foreach (self::monthsBackOne() as $key => $month) {
-                yield "{$key}-plus-{$multipleKey}-days" => [$month[0], 1 + $multiple, $month[1]];
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 1 + $multiple, $month[1]];
             }
 
-            // all days advanced 2, 9, 16, ...
+            // all months back 2, 14, 26, ...
             foreach (self::monthsBackTwo() as $key => $month) {
-                yield "{$key}-plus-{$multipleKey}-days" => [$month[0], 2 + $multiple, $month[1]];
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 2 + $multiple, $month[1]];
             }
 
-            // all days advanced 3, 10, 17, ...
+            // all months back 3, 15, 27, ...
             foreach (self::monthsBackThree() as $key => $month) {
-                yield "{$key}-plus-{$multipleKey}-days" => [$month[0], 3 + $multiple, $month[1]];
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 3 + $multiple, $month[1]];
             }
 
-            // all days advanced 4, 11, 18, ...
+            // all months back 4, 16, 28, ...
             foreach (self::monthsBackFour() as $key => $month) {
-                yield "{$key}-plus-{$multipleKey}-days" => [$month[0], 4 + $multiple, $month[1]];
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 4 + $multiple, $month[1]];
             }
 
-            // all days advanced 5, 12, 19, ...
+            // all months back 5, 17, 29, ...
             foreach (self::monthsBackFive() as $key => $month) {
-                yield "{$key}-plus-{$multipleKey}-days" => [$month[0], 5 + $multiple, $month[1]];
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 5 + $multiple, $month[1]];
             }
 
-            // all days advanced 6, 13, 20, ...
+            // all months back 6, 18, 30, ...
             foreach (self::monthsBackSix() as $key => $month) {
-                yield "{$key}-plus-{$multipleKey}-days" => [$month[0], 6 + $multiple, $month[1]];
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 6 + $multiple, $month[1]];
+            }
+
+            // all months back 7, 19, 31, ...
+            foreach (self::monthsBackSeven() as $key => $month) {
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 7 + $multiple, $month[1]];
+            }
+
+            // all months back 8, 20, 32, ...
+            foreach (self::monthsBackEight() as $key => $month) {
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 8 + $multiple, $month[1]];
+            }
+
+            // all months back 9, 21, 33, ...
+            foreach (self::monthsBackNine() as $key => $month) {
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 9 + $multiple, $month[1]];
+            }
+
+            // all months back 10, 22, 34, ...
+            foreach (self::monthsBackTen() as $key => $month) {
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 10 + $multiple, $month[1]];
+            }
+
+            // all months back 11, 23, 35, ...
+            foreach (self::monthsBackEleven() as $key => $month) {
+                yield "{$key}-plus-{$multipleKey}-months" => [$month[0], 11 + $multiple, $month[1]];
             }
         }
     }
 
-    /** All months paired with a multiples of seven to test advance() and back() work with counts greater than a week. */
+    /** Each month paired with a multiple of twelve to test advance() and back() work with counts greater than a year. */
     public static function monthsAndMultiplesOfTwelve(): iterable
     {
         foreach (self::months() as $monthKey => $month) {
@@ -575,7 +600,7 @@ class MonthTest extends TestCase
         }
     }
 
-    /** Data for all months and their distances forward to other months. */
+    /** All months and their distances forward to other months. */
     public static function monthsAndDistancesToOtherMonths(): iterable
     {
         foreach (self::monthsAdvancedOne() as $key => $months) {
@@ -623,7 +648,7 @@ class MonthTest extends TestCase
         }
     }
 
-    /** Data for all months and their distances forward from other months. */
+    /** All months and their distances forward from other months. */
     public static function monthsAndDistancesFromOtherMonths(): iterable
     {
         foreach (self::monthsAndDistancesToOtherMonths() as $key => $arguments) {
@@ -753,7 +778,7 @@ class MonthTest extends TestCase
         self::assertSame(0, $month->distanceTo($month));
     }
 
-    /** Ensure distanceTo() correctly determines the number of months between two Months. */
+    /** Ensure distanceFrom() correctly determines the number of months between two Months. */
     #[DataProvider("monthsAndDistancesFromOtherMonths")]
     public function testDistanceFrom1(Month $to, Month $from, int $expectedDistance): void
     {
@@ -788,7 +813,7 @@ class MonthTest extends TestCase
         self::assertSame($expectedDayCount, $month->dayCount($year));
     }
 
-    /** Ensure we get the expected counts for non-leap years. */
+    /** Ensure we get the expected counts for leap years. */
     #[DataProvider("monthsAndDayCountsLeapYears")]
     public function testDayCount2(Month $month, int $year, int $expectedDayCount): void
     {

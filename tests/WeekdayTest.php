@@ -3,9 +3,11 @@
 namespace MeridiemTests;
 
 use Meridiem\Weekday;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(Weekday::class)]
 class WeekdayTest extends TestCase
 {
     /** All weekdays. */
@@ -78,6 +80,7 @@ class WeekdayTest extends TestCase
         yield 'saturday-sunday' => [Weekday::Saturday, Weekday::Sunday];
     }
 
+    /** The first 6 multiples of 7. */
     public static function multiplesOfSeven(): iterable
     {
         for ($factor = 0; $factor < 5; ++$factor) {
@@ -250,32 +253,32 @@ class WeekdayTest extends TestCase
         foreach (self::multiplesOfSeven() as $multipleKey => $multiple) {
             $multiple = $multiple[0];
 
-            // all days advanced 1, 8, 15, ...
+            // all days back 1, 8, 15, ...
             foreach (self::daysBackOne() as $key => $day) {
                 yield "{$key}-plus-{$multipleKey}-days" => [$day[0], 1 + $multiple, $day[1]];
             }
 
-            // all days advanced 2, 9, 16, ...
+            // all days back 2, 9, 16, ...
             foreach (self::daysBackTwo() as $key => $day) {
                 yield "{$key}-plus-{$multipleKey}-days" => [$day[0], 2 + $multiple, $day[1]];
             }
 
-            // all days advanced 3, 10, 17, ...
+            // all days back 3, 10, 17, ...
             foreach (self::daysBackThree() as $key => $day) {
                 yield "{$key}-plus-{$multipleKey}-days" => [$day[0], 3 + $multiple, $day[1]];
             }
 
-            // all days advanced 4, 11, 18, ...
+            // all days back 4, 11, 18, ...
             foreach (self::daysBackFour() as $key => $day) {
                 yield "{$key}-plus-{$multipleKey}-days" => [$day[0], 4 + $multiple, $day[1]];
             }
 
-            // all days advanced 5, 12, 19, ...
+            // all days back 5, 12, 19, ...
             foreach (self::daysBackFive() as $key => $day) {
                 yield "{$key}-plus-{$multipleKey}-days" => [$day[0], 5 + $multiple, $day[1]];
             }
 
-            // all days advanced 6, 13, 20, ...
+            // all days back 6, 13, 20, ...
             foreach (self::daysBackSix() as $key => $day) {
                 yield "{$key}-plus-{$multipleKey}-days" => [$day[0], 6 + $multiple, $day[1]];
             }
@@ -289,6 +292,43 @@ class WeekdayTest extends TestCase
             foreach (self::multiplesOfSeven() as $multipleKey => $multiple) {
                 yield "{$dayKey}-{$multipleKey}" => [$day[0], $multiple[0]];
             }
+        }
+    }
+
+    /** All days and their distances forward to other days. */
+    public static function daysAndDistancesToOtherDays(): iterable
+    {
+        foreach (self::daysAdvancedOne() as $key => $days) {
+            yield "distance-to-{$key}" => [...$days, 1];
+        }
+
+        foreach (self::daysAdvancedTwo() as $key => $days) {
+            yield "distance-to-{$key}" => [...$days, 2];
+        }
+
+        foreach (self::daysAdvancedThree() as $key => $days) {
+            yield "distance-to-{$key}" => [...$days, 3];
+        }
+
+        foreach (self::daysAdvancedFour() as $key => $days) {
+            yield "distance-to-{$key}" => [...$days, 4];
+        }
+
+        foreach (self::daysAdvancedFive() as $key => $days) {
+            yield "distance-to-{$key}" => [...$days, 5];
+        }
+
+        foreach (self::daysAdvancedSix() as $key => $days) {
+            yield "distance-to-{$key}" => [...$days, 6];
+        }
+    }
+
+    /** All days and their distances forward from other days. */
+    public static function daysAndDistancesFromOtherDays(): iterable
+    {
+        foreach (self::daysAndDistancesToOtherDays() as $key => $arguments) {
+            [$from, $to, $distance] = $arguments;
+            yield str_replace("-to-", "-from-", $key) => [$to, $from, $distance];
         }
     }
 
@@ -363,7 +403,7 @@ class WeekdayTest extends TestCase
     }
 
     /** Ensure distanceTo() correctly determines the number of days between two Weekdays. */
-    // TODO #[DataProvider()]
+    #[DataProvider("daysAndDistancesToOtherDays")]
     public function testDistanceTo1(Weekday $from, Weekday $to, int $expectedDistance): void
     {
         self::assertSame($expectedDistance, $from->distanceTo($to));
@@ -376,8 +416,8 @@ class WeekdayTest extends TestCase
         self::assertSame(0, $day->distanceTo($day));
     }
 
-    /** Ensure distanceTo() correctly determines the number of days between two Weekdays. */
-    // TODO #[DataProvider()]
+    /** Ensure distanceFrom() correctly determines the number of days between two Weekdays. */
+    #[DataProvider("daysAndDistancesFromOtherDays")]
     public function testDistanceFrom1(Weekday $to, Weekday $from, int $expectedDistance): void
     {
         self::assertSame($expectedDistance, $to->distanceFrom($from));
@@ -388,5 +428,19 @@ class WeekdayTest extends TestCase
     public function testDistanceFrom2(Weekday $day): void
     {
         self::assertSame(0, $day->distanceFrom($day));
+    }
+
+    /** Ensure the next day is the expected one. */
+    #[DataProvider("daysAdvancedOne")]
+    public function testNext1(Weekday $day, Weekday $expectedNextDay): void
+    {
+        self::assertSame($expectedNextDay, $day->next());
+    }
+
+    /** Ensure the previous day is the expected one. */
+    #[DataProvider("daysBackOne")]
+    public function testPrevious1(Weekday $day, Weekday $expectedPreviousDay): void
+    {
+        self::assertSame($expectedPreviousDay, $day->previous());
     }
 }

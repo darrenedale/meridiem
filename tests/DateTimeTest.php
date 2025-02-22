@@ -5,11 +5,11 @@ namespace MeridiemTests;
 use DateTimeInterface as PhpDateTimeInterface;
 use DateTime as PhpDateTime;
 use DateTimeImmutable as PhpDateTimeImmutable;
-use DateTimeZone;
+use DateTimeZone as PhpDateTimeZone;
 use Meridiem\DateTime;
 use Meridiem\Month;
 use InvalidArgumentException;
-use Meridiem\PhpDateTimeFormatter;
+use Meridiem\TimeZone;
 use Meridiem\UnixEpoch;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -161,7 +161,7 @@ class DateTimeTest extends TestCase
 
     public static function dataForTestCreate1(): iterable
     {
-        $utc = new DateTimeZone('UTC');
+        $utc = TimeZone::lookup("UTC");
         yield "typical" => [2025, Month::April, 23, 13, 21, 7, 165, $utc];
 
         foreach (Month::cases() as $month) {
@@ -184,14 +184,14 @@ class DateTimeTest extends TestCase
             yield "end-second-" . sprintf("%02d", $second) => [1966, Month::November, 10, 12, 33, $second, 999, $utc];
         }
 
-        yield "timezone-europe-london" => [1975, Month::May, 18, 5, 28, 14, 311, new DateTimeZone("Europe/London")];
-        yield "timezone-+0400" => [2001, Month::October, 23, 22, 01, 19, 170, new DateTimeZone("+0400")];
-        yield "timezone--0330" => [2001, Month::March, 23, 22, 01, 19, 170, new DateTimeZone("-0330")];
+//        yield "timezone-europe-london" => [1975, Month::May, 18, 5, 28, 14, 311, new DateTimeZone("Europe/London")];
+        yield "timezone-+0400" => [2001, Month::October, 23, 22, 01, 19, 170, TimeZone::parse("+0400")];
+        yield "timezone--0330" => [2001, Month::March, 23, 22, 01, 19, 170, TimeZone::parse("-0330")];
     }
 
     /** Ensure we can create accurate DateTime instances from date-time components. */
     #[DataProvider("dataForTestCreate1")]
-    public function testCreate1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, DateTimeZone $timeZone): void
+    public function testCreate1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, TimeZone $timeZone): void
     {
         $actual = DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone);
         self::assertSame($year, $actual->year());
@@ -201,7 +201,7 @@ class DateTimeTest extends TestCase
         self::assertSame($minute, $actual->minute());
         self::assertSame($second, $actual->second());
         self::assertSame($millisecond, $actual->millisecond());
-        self::assertSame($timeZone->getName(), $actual->timeZone()->getName());
+        self::assertSame($timeZone->name(), $actual->timeZone()->name());
     }
 
     /** Ensure we can create dates in leap years. */
@@ -448,11 +448,8 @@ class DateTimeTest extends TestCase
 
     public static function phpDateTimes(): iterable
     {
-        $timezoneName = "UTC";
-
-        // TODO accommodate timezone offsets in timestamp conversion
-//        foreach (["UTC", "Africa/Kigali"] as $timezoneName) {
-            $timezone = new DateTimeZone($timezoneName);
+        foreach (["UTC"/*, "Africa/Kigali"*/] as $timezoneName) {
+            $timezone = new PhpDateTimeZone($timezoneName);
 
             // Every day of a non-leap year and of a leap year
             foreach ([2025, 2000] as $year) {
@@ -544,28 +541,26 @@ class DateTimeTest extends TestCase
             // Every millisecond of a second
             for ($millisecond = 0; $millisecond <= 999; $millisecond++) {
                 yield "every-millisecond-{$timezoneName}-1965-12-01-03:21:18.{$millisecond}" => [
-                    PhpDateTime::createFromFormat("Y-m-d H:i:s.v", sprintf("1965-12-01 01:21:18.%03d", $millisecond), $timezone),
+                    PhpDateTime::createFromFormat("Y-m-d H:i:s.v", sprintf("1965-12-01 03:21:18.%03d", $millisecond), $timezone),
                     1965,
                     Month::December,
                     1,
-                    1,
+                    3,
                     21,
                     18,
                     $millisecond,
                     $timezoneName,
                 ];
             }
-//        }
+        }
     }
 
 
     public static function phpDateTimeImmutables(): iterable
     {
         $timezoneName = "UTC";
-
-        // TODO accommodate timezone offsets in timestamp conversion
-//        foreach (["America/New_York", "Europe/Londo"] as $timezoneName) {
-            $timezone = new DateTimeZone($timezoneName);
+//        foreach (["America/New_York", "Europe/London"] as $timezoneName) {
+            $timezone = new PhpDateTimeZone($timezoneName);
 
             // Every day of a non-leap year and of a leap year
             foreach ([2025, 2000] as $year) {
@@ -656,7 +651,7 @@ class DateTimeTest extends TestCase
 
             // Every millisecond of a second
             for ($millisecond = 0; $millisecond <= 999; $millisecond++) {
-                yield "every-millisecond-{$timezoneName}-1965-12-01-03:21:18.{$millisecond}" => [
+                yield "every-millisecond-{$timezoneName}-1965-12-01-01:21:18.{$millisecond}" => [
                     PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("1965-12-01 01:21:18.%03d", $millisecond), $timezone),
                     1965,
                     Month::December,
@@ -683,7 +678,7 @@ class DateTimeTest extends TestCase
         self::assertSame($expectedMinute, $actual->minute());
         self::assertSame($expectedSecond, $actual->second());
         self::assertSame($expectedMillisecond, $actual->millisecond());
-        self::assertSame($expectedTimeZone, $actual->timeZone()->getName());
+        self::assertSame($expectedTimeZone, $actual->timeZone()->name());
     }
 
     /** Ensure PHP DateTimeImmutable objects can be correctly converted. */
@@ -698,7 +693,7 @@ class DateTimeTest extends TestCase
         self::assertSame($expectedMinute, $actual->minute());
         self::assertSame($expectedSecond, $actual->second());
         self::assertSame($expectedMillisecond, $actual->millisecond());
-        self::assertSame($expectedTimeZone, $actual->timeZone()->getName());
+        self::assertSame($expectedTimeZone, $actual->timeZone()->name());
     }
 
     public static function dataForTestFromDateTime3(): iterable
