@@ -40,23 +40,35 @@ enum Month: int
         return $month->value < $this->value;
     }
 
+    /**
+     * Fetch the month that is a number of months after this.
+     *
+     * @param int $months How many months to count forwards. Must be >= 0.
+     */
     public function advance(int $months): Month
     {
         assert(0 <= $months, "Expected months >= 0, found {$months}");
         return self::from(1 + ($months + $this->value - 1) % 12);
     }
 
+    /**
+     * Fetch the month that is a number of months before this.
+     *
+     * @param int $months How many months to count backwards. Must be >= 0.
+     */
     public function back(int $months): Month
     {
         assert(0 <= $months, "Expected months >= 0, found {$months}");
         return $this->advance(12 - ($months % 12));
     }
 
+    /** Fetch the month after this. */
     public function next(): Month
     {
         return $this->advance(1);
     }
 
+    /** Fetch the month before this. */
     public function previous(): Month
     {
         return $this->back(1);

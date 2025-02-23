@@ -25,25 +25,35 @@ enum Weekday: int
         return $weekday->value < $this->value;
     }
 
-    /** Fetch the weekday a number of days after this day. */
+    /**
+     * Fetch the weekday that is a number of days after this.
+     *
+     * @param int $days How many days to count forwards. Must be >= 0.
+     */
     public function advance(int $days): Weekday
     {
         assert(0 <= $days, "Expected days >= 0, found {$days}");
         return Weekday::from(($this->value + $days) % 7);
     }
 
-    /** Fetch the weekday a number of days before this day. */
+    /**
+     * Fetch the weekday that is a number of days before this.
+     *
+     * @param int $days How many days to count backwards. Must be >= 0.
+     */
     public function back(int $days): Weekday
     {
         assert(0 <= $days, "Expected days >= 0, found {$days}");
         return $this->advance(7 - ($days % 7));
     }
 
+    /** Fetch the weekday after this. */
     public function next(): Weekday
     {
         return $this->advance(1);
     }
 
+    /** Fetch the weekday before this. */
     public function previous(): Weekday
     {
         return $this->back(1);
