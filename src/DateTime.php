@@ -451,7 +451,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     }
 
     /** Create a new DateTime with the time from the current DateTime and a specified date. */
-    public function withDate(int $day, Month $month, int $year): static
+    public function withDate(int $year, Month $month, int $day): static
     {
         assert(self::MinYear <= $year && self::MaxYear >= $year, new InvalidArgumentException("Expected year between -9999 and 9999 inclusive, found {$year}"));
         assert(self::MinDay <= $day && $month->dayCount($year) >= $day, new InvalidArgumentException("Expected day between 1 and {$month->dayCount($year)} inclusive, found {$day}"));
