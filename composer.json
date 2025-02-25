@@ -22,7 +22,8 @@
     },
     "require-dev": {
         "phpunit/phpunit": "^11.0",
-        "equit/xray": "dev-main"
+        "equit/xray": "dev-main",
+        "mockery/mockery": "^1.6"
     },
     "autoload": {
         "psr-4": {

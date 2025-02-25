@@ -6,11 +6,15 @@ use DateTimeInterface as PhpDateTimeInterface;
 use DateTime as PhpDateTime;
 use DateTimeImmutable as PhpDateTimeImmutable;
 use DateTimeZone as PhpDateTimeZone;
+use Equit\XRay\StaticXRay;
+use Equit\XRay\XRay;
+use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\DateTime;
 use Meridiem\Month;
 use InvalidArgumentException;
 use Meridiem\TimeZone;
 use Meridiem\UnixEpoch;
+use Mockery;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -18,6 +22,27 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DateTime::class)]
 class DateTimeTest extends TestCase
 {
+    public function tearDown(): void
+    {
+        Mockery::close();
+    }
+
+    /** Helper to generate a mock implementation of the DateTime contract. */
+    private static function mockDateTime(int $year = UnixEpoch::Year, Month $month = UnixEpoch::Month, int $day = UnixEpoch::Day, int $hour = UnixEpoch::Hour, int $minute = UnixEpoch::Minute, int $second = UnixEpoch::Second, int $millisecond = UnixEpoch::Millisecond, int $timestamp = 0): DateTimeContract
+    {
+        $dateTime = Mockery::mock(DateTimeContract::class);
+        $dateTime->shouldReceive('year')->zeroOrMoreTimes()->andReturn($year)->byDefault();
+        $dateTime->shouldReceive('month')->zeroOrMoreTimes()->andReturn($month)->byDefault();
+        $dateTime->shouldReceive('day')->zeroOrMoreTimes()->andReturn($day)->byDefault();
+        $dateTime->shouldReceive('hour')->zeroOrMoreTimes()->andReturn($hour)->byDefault();
+        $dateTime->shouldReceive('minute')->zeroOrMoreTimes()->andReturn($minute)->byDefault();
+        $dateTime->shouldReceive('second')->zeroOrMoreTimes()->andReturn($second)->byDefault();
+        $dateTime->shouldReceive('millisecond')->zeroOrMoreTimes()->andReturn($millisecond)->byDefault();
+        $dateTime->shouldReceive('unixTimestampMs')->zeroOrMoreTimes()->andReturn($timestamp)->byDefault();
+        $dateTime->shouldReceive('unixTimestamp')->zeroOrMoreTimes()->andReturn((int) floor($timestamp / 1000.0))->byDefault();
+        return $dateTime;
+    }
+
     public static function invalidYears(): iterable
     {
         yield "too-small" => [-10000];
@@ -187,6 +212,108 @@ class DateTimeTest extends TestCase
 //        yield "timezone-europe-london" => [1975, Month::May, 18, 5, 28, 14, 311, new DateTimeZone("Europe/London")];
         yield "timezone-+0400" => [2001, Month::October, 23, 22, 01, 19, 170, TimeZone::parse("+0400")];
         yield "timezone--0330" => [2001, Month::March, 23, 22, 01, 19, 170, TimeZone::parse("-0330")];
+    }
+
+    /** DateTimes each paired with a second DateTime whose Gregorian properties are after the first. */
+    public static function dateTimesAndLaterDateTimes(): iterable
+    {
+        // 2025-02-25T19:19:09.464Z <=> 2025-02-25T19:19:09.465Z
+        yield "gregorian-1-millisecond-later" => [1740511149464, 1740511149465];
+
+        // 1968-05-19T18:03:44.000Z <=> 1968-05-19T18:03:45.000Z
+        yield "gregorian-1-second-later" => [-51083776000, -51083775000];
+
+        // 2014-12-25T19:21:16.000Z <=> 2014-12-25T19:22:16.000Z
+        yield "gregorian-1-minute-later" => [1419535276000, 1419535336000];
+
+        // 2005-09-12T10:19:27.000Z <=> 2005-09-12T11:19:27.000Z
+        yield "gregorian-1-hour-later" => [1126520367000, 1126523967000];
+
+        // 2011-08-23T17:37:19.000Z <=> 2011-08-24T17:37:19.000Z
+        yield "gregorian-1-day-later" => [1314121039000, 1314207439000];
+
+        // 2001-07-03T06:41:25.000Z <=> 2001-08-03T06:41:25.000Z
+        yield "gregorian-1-month-later" => [994142485000, 996820885000];
+
+        // 1992-06-11T09:28:09.000Z <=> 1993-06-11T09:28:09.000Z
+        yield "gregorian-1-year-later" => [708254889000, 739790889000];
+    }
+
+    /** Timestamps paired with a second timestamp whose Gregorian properties are before the first. */
+    public static function dateTimesAndEarlierDateTimes(): iterable
+    {
+        // 2025-02-25T19:29:58.043Z <=> 2025-02-25T19:29:58.042Z
+        yield "gregorian-1-millisecond-earlier" => [1740511798043, 1740511798042];
+
+        // 2029-04-28T11:31:53.000Z <=> 2029-04-28T11:31:52.000Z
+        yield "gregorian-1-second-earlier" => [1872070313000, 1872070312000];
+
+        // 2008-03-10T23:35:43.000Z <=> 2008-03-10T23:34:43.000Z
+        yield "gregorian-1-minute-earlier" => [1205192143000, 1205192083000];
+
+        // 1931-05-14T18:21:46.000Z <=> 1931-05-14T17:21:46.000Z
+        yield "gregorian-1-hour-earlier" => [-1219210694000, -1219214294000];
+
+        // 1942-08-19T13:18:26.000Z <=> 1942-08-18T13:18:26.000Z
+        yield "gregorian-1-day-earlier" => [-863692894000, -863779294000];
+
+        // 1955-09-10T21:22:21.000Z <=> 1955-08-10T21:22:21.000Z
+        yield "gregorian-1-month-earlier" => [-448943859000, -451535859000];
+
+        // 1963-02-15T10:00:38.000Z <=> 1962-02-15T10:00:38.000Z
+        yield "gregorian-1-year-earlier" => [-217000762000, -248536762000];
+    }
+
+    /**
+     * Timestamps paired with a second alternative DateTime contract implementation whose Gregorian properties are
+     * after the first.
+     */
+    public static function dateTimesAndLaterAlternativeDateTimes(): iterable
+    {
+        /** @var int[] $arguments */
+        foreach (self::dateTimesAndLaterDateTimes() as $key => $arguments) {
+            $second = DateTime::fromUnixTimestampMs($arguments[1]);
+
+            yield "alternative-{$key}" => [
+                $arguments[0],
+                self::mockDateTime(
+                    $second->year(),
+                    $second->month(),
+                    $second->day(),
+                    $second->hour(),
+                    $second->minute(),
+                    $second->second(),
+                    $second->millisecond(),
+                    $second->unixTimestampMs(),
+                ),
+            ];
+        }
+    }
+
+    /**
+     * Timestamps paired with a second alternative DateTime contract implementation whose Gregorian properties are
+     * before the first.
+     */
+    public static function dateTimesAndEarlierAlternativeDateTimes(): iterable
+    {
+        /** @var DateTime[] $arguments */
+        foreach (self::dateTimesAndEarlierDateTimes() as $key => $arguments) {
+            $second = DateTime::fromUnixTimestampMs($arguments[1]);
+
+            yield "alternative-{$key}" => [
+                $arguments[0],
+                self::mockDateTime(
+                    $second->year(),
+                    $second->month(),
+                    $second->day(),
+                    $second->hour(),
+                    $second->minute(),
+                    $second->second(),
+                    $second->millisecond(),
+                    $second->unixTimestampMs(),
+                ),
+            ];
+        }
     }
 
     /** Ensure we can create accurate DateTime instances from date-time components. */
@@ -751,4 +878,306 @@ class DateTimeTest extends TestCase
         self::assertSame($timestamp, $actual->unixTimestamp());
         self::assertSame($timestamp * 1000, $actual->unixTimestampMs());
     }
+
+    /** Ensure leap years are detected correctly. */
+    #[DataProvider("leapYears")]
+    public function testIsLeapYear1(int $year): void
+    {
+        self::assertTrue((new StaticXRay(DateTime::class))->isLeapYear($year));
+    }
+
+    /** Ensure non-leap years are detected correctly. */
+    #[DataProvider("nonLeapYears")]
+    public function testIsLeapYear2(int $year): void
+    {
+        self::assertFalse((new StaticXRay(DateTime::class))->isLeapYear($year));
+    }
+
+    /** Ensure a DateTime is Gregorian-clean when constructed from Gregorian date-time properties. */
+    public function testIsGregorianClean1(): void
+    {
+        $dateTime = DateTime::create( 2023, Month::March, 21,10, 21, 44);
+        self::assertTrue((new XRay($dateTime))->isGregorianClean());
+    }
+
+    /** Ensure a DateTime is not Gregorian-clean when constructed from a timestamp. */
+    public function testIsGregorianClean2(): void
+    {
+        // 2019-09-12T20:35:19.000Z
+        $dateTime = DateTime::fromUnixTimestamp(1568320519);
+        self::assertFalse((new XRay($dateTime))->isGregorianClean());
+    }
+
+    /** Ensure a DateTime is not Gregorian-clean when constructed from a milliseconds timestamp. */
+    public function testIsGregorianClean3(): void
+    {
+        // 2020-09-07T22:37:28.681Z
+        $dateTime = DateTime::fromUnixTimestampMs(1599518248681);
+        self::assertFalse((new XRay($dateTime))->isGregorianClean());
+    }
+
+    /** Ensure a DateTime is Gregorian-clean when set from Gregorian date-time properties. */
+    public function testIsGregorianClean4(): void
+    {
+        // 2025-02-24T23:32:14.000Z
+        $dateTime = DateTime::fromUnixTimestamp(1740439934);
+        self::assertFalse((new XRay($dateTime))->isGregorianClean());
+        $dateTime = $dateTime->withDate(2025, Month::April, 14)->withTime(15, 8, 31);
+        self::assertTrue((new XRay($dateTime))->isGregorianClean());
+    }
+
+    /** Ensure clones retain the original's properties. */
+    public function testClone1(): void
+    {
+        // 2025-02-25T19:07:48.000Z
+        $expected = DateTime::fromUnixTimestamp(1740510468);
+        $timeZone = $expected->timeZone();
+        $actual = clone $expected;
+        self::assertSame($expected->unixTimestamp(), $actual->unixTimestamp());
+        self::assertSame($expected->unixTimestampMs(), $actual->unixTimestampMs());
+        self::assertSame($expected->year(), $actual->year());
+        self::assertSame($expected->month(), $actual->month());
+        self::assertSame($expected->day(), $actual->day());
+        self::assertSame($expected->hour(), $actual->hour());
+        self::assertSame($expected->minute(), $actual->minute());
+        self::assertSame($expected->second(), $actual->second());
+        self::assertSame($expected->millisecond(), $actual->millisecond());
+        self::assertSame($timeZone->name(), $actual->timeZone()->name());
+    }
+
+    /** Ensure cloning clones the timezone to retain immutability. */
+    public function testClone2(): void
+    {
+        // 2025-02-25T19:11:48.000Z
+        $expected = DateTime::fromUnixTimestamp(1740510708);
+        $actual = clone $expected;
+        self::assertNotSame($expected->timeZone(), $actual->timeZone());
+    }
+
+    /** Ensure comparison result is 0 for identical Gregorian date-time properties. */
+    public function testCompareGregorian1(): void
+    {
+        // 2025-02-25T19:14:55.000Z
+        $first = new XRay(DateTime::fromUnixTimestampMs(1740510895448));
+        $first->syncGregorian();
+        $second = DateTime::fromUnixTimestampMs(1740510895448);
+        self::assertSame(0, $first->compareGregorian($second));
+    }
+
+    /** Ensure comparison result is < 0 when comparing to later Gregorian date-times. */
+    #[DataProvider("dateTimesAndLaterDateTimes")]
+    public function testCompareGregorian2(int $firstUnix, int $secondUnix): void
+    {
+        $first = new XRay(DateTime::fromUnixTimestampMs($firstUnix));
+        $first->syncGregorian();
+        self::assertLessThan(0, $first->compareGregorian(DateTime::fromUnixTimestampMs($secondUnix)));
+    }
+
+    /** Ensure comparison result is > 0 when comparing to earlier Gregorian date-times. */
+    #[DataProvider("dateTimesAndEarlierDateTimes")]
+    public function testCompareGregorian3(int $firstUnix, int $secondUnix): void
+    {
+        $first = new XRay(DateTime::fromUnixTimestampMs($firstUnix));
+        $first->syncGregorian();
+        self::assertGreaterThan(0, $first->compareGregorian(DateTime::fromUnixTimestampMs($secondUnix)));
+    }
+
+    /** Ensure Gregorian comparisons work as expected with other equal DateTime contract implementations */
+    public function testCompareGregorian4(): void
+    {
+        // 2025-02-25T22:01:53.000Z
+        $first = new XRay(DateTime::fromUnixTimestamp(1740520913));
+        $first->syncGregorian();
+        $second = self::mockDateTime(2025, Month::February, 25, 22, 1, 53, 0);
+        self::assertSame(0, $first->compareGregorian($second));
+    }
+
+    /**
+     * Ensure comparison result is < 0 when comparing to other DateTime contract implementations' later Gregorian
+     * date-times.
+     */
+    #[DataProvider("dateTimesAndLaterAlternativeDateTimes")]
+    public function testCompareGregorian5(int $firstUnix, DateTimeContract $other): void
+    {
+        $first = new XRay(DateTime::fromUnixTimestampMs($firstUnix));
+        $first->syncGregorian();
+        self::assertLessThan(0, $first->compareGregorian($other));
+    }
+
+    /**
+     * Ensure comparison result is > 0 when comparing to other DateTime contract implementations' later Gregorian
+     * date-times.
+     */
+    #[DataProvider("dateTimesAndEarlierAlternativeDateTimes")]
+    public function testCompareGregorian6(int $firstUnix, DateTimeContract $other): void
+    {
+        $first = new XRay(DateTime::fromUnixTimestampMs($firstUnix));
+        $first->syncGregorian();
+        self::assertGreaterThan(0, $first->compareGregorian($other));
+    }
+
+    /** Ensure comparison result is 0 for identical Unix timestamps. */
+    public function testCompareUnix1(): void
+    {
+        // 2025-02-25T22:25:07.737Z
+        $first = DateTime::fromUnixTimestampMs(1740522307737);
+        $second = DateTime::fromUnixTimestampMs(1740522307737);
+        self::assertSame(0, (new XRay($first))->compareUnix($second));
+    }
+
+    /** Ensure comparison result is > 0 when comparing to later Unix date-times. */
+    #[DataProvider("dateTimesAndLaterDateTimes")]
+    public function testCompareUnix2(int $firstUnix, int $secondUnix): void
+    {
+        self::assertLessThan(0, (new XRay(DateTime::fromUnixTimestampMs($firstUnix)))->compareUnix(DateTime::fromUnixTimestampMs($secondUnix)));
+    }
+
+    /** Ensure comparison result is < 0 when comparing to earlier Unix date-times. */
+    #[DataProvider("dateTimesAndEarlierDateTimes")]
+    public function testCompareUnix3(int $firstUnix, int $secondUnix): void
+    {
+        self::assertGreaterThan(0, (new XRay(DateTime::fromUnixTimestampMs($firstUnix)))->compareUnix(DateTime::fromUnixTimestampMs($secondUnix)));
+    }
+
+    /** Ensure Unix comparisons work as expected with other equal DateTime contract implementations */
+    public function testCompareUnix4(): void
+    {
+        // 2025-02-25T22:01:53.000Z
+        $first = DateTime::fromUnixTimestampMs(1740520913);
+        $second = self::mockDateTime(timestamp: 1740520913);
+        self::assertSame(0, (new XRay($first))->compareUnix($second));
+    }
+
+    /**
+     * Ensure comparison result is < 0 when comparing to other DateTime contract implementations' later Unix date-times.
+     */
+    #[DataProvider("dateTimesAndLaterAlternativeDateTimes")]
+    public function testCompareUnix5(int $firstUnix, DateTimeContract $other): void
+    {
+        self::assertLessThan(0, (new XRay(DateTime::fromUnixTimestampMs($firstUnix)))->compareUnix($other));
+    }
+
+    /**
+     * Ensure comparison result is > 0 when comparing to other DateTime contract implementations' later Unix timestamps.
+     */
+    #[DataProvider("dateTimesAndEarlierAlternativeDateTimes")]
+    public function testCompareUnix6(int $firstUnix, DateTimeContract $other): void
+    {
+        self::assertGreaterThan(0, (new XRay(DateTime::fromUnixTimestampMs($firstUnix)))->compareUnix($other));
+    }
+
+    /** Ensure DateTime created from Unix timestamp is Unix clean. */
+    public function testIsUnixClean1(): void
+    {
+        self::assertTrue((new XRay(DateTime::fromUnixTimestampMs(1740525077)))->isUnixClean());
+    }
+
+    /** Ensure DateTime created from Unix millisecond timestamp is Unix clean. */
+    public function testIsUnixClean2(): void
+    {
+        self::assertTrue((new XRay(DateTime::fromUnixTimestampMs(1740525115623)))->isUnixClean());
+    }
+
+    /** Ensure DateTime created from Gregorian components is not Unix clean. */
+    public function testIsUnixClean3(): void
+    {
+        self::assertFalse((new XRay(DateTime::create(2025, Month::February, 25, 23, 13, 51, 841)))->isUnixClean());
+    }
+
+    /** Ensure DateTime created from Gregorian components without time is not Unix clean. */
+    public function testIsUnixClean4(): void
+    {
+        self::assertFalse((new XRay(DateTime::create(2025, Month::March, 1)))->isUnixClean());
+    }
+
+    /** Ensure DateTime with modified Gregorian date is not Unix clean. */
+    public function testIsUnixClean5(): void
+    {
+        // 2025-02-25T23:19:04.000Z
+        $dateTime = DateTime::fromUnixTimestampMs(1740525544701)
+            ->withDate(2024, Month::April, 4);
+
+        self::assertFalse((new XRay($dateTime))->isUnixClean());
+    }
+
+    /** Ensure DateTime with modified Gregorian time is not Unix clean. */
+    public function testIsUnixClean6(): void
+    {
+        // 2025-02-25T23:23:17.000Z
+        $dateTime = DateTime::fromUnixTimestampMs(1740525797045)
+            ->withTime(13, 8, 4, 8);
+
+        self::assertFalse((new XRay($dateTime))->isUnixClean());
+    }
+
+    /** Ensure DateTime with modified Gregorian hour, minute and second is not Unix clean. */
+    public function testIsUnixClean7(): void
+    {
+        // 2025-02-25T23:24:17.622Z
+        $dateTime = DateTime::fromUnixTimestampMs(1740525857622)
+            ->withTime(10, 32, 18);
+
+        self::assertFalse((new XRay($dateTime))->isUnixClean());
+    }
+
+    /** Ensure DateTime with modified Gregorian hour and minute is not Unix clean. */
+    public function testIsUnixClean8(): void
+    {
+        // 2025-02-25T23:25:29.923Z
+        $dateTime = DateTime::fromUnixTimestampMs(1740525929923)
+            ->withTime(9, 41, 55);
+
+        self::assertFalse((new XRay($dateTime))->isUnixClean());
+    }
+
+    /** Ensure the DateTime is Unix clean after Unix synchronisation. */
+    public function testIsUnixClean9(): void
+    {
+        $dateTime = new XRay(DateTime::create(2025, Month::February, 25));
+        self::assertFalse($dateTime->isUnixClean());
+        $dateTime->syncUnix();
+        self::assertTrue($dateTime->isUnixClean());
+    }
+    
+    // TODO isGregorianClean()
+    // TODO millisecondsBeforeEpoch()
+    // TODO millisecondsAfterEpoch()
+    // TODO syncUnix()
+    // TODO syncGregorianDecrementHour()
+    // TODO syncGregorianIncrementHour()
+    // TODO syncGregorianPostEpoch()
+    // TODO syncGregorianPreEpoch()
+    // TODO syncGregorian()
+    // TODO now()
+    // TODO withDate()
+    // TODO year()
+    // TODO month()
+    // TODO day()
+    // TODO hour()
+    // TODO minute()
+    // TODO second()
+    // TODO millisecond()
+    // TODO weekday()
+    // TODO withTime()
+    // TODO withHour()
+    // TODO hour()
+    // TODO withMinute()
+    // TODO minute()
+    // TODO withSecond()
+    // TODO second()
+    // TODO withMillisecond()
+    // TODO millisecond()
+    // TODO unixTimestamp()
+    // TODO unixTimestampMs()
+    // TODO withTimeZone()
+    // TODO timeZone()
+    // TODO isBefore()
+    // TODO isAfter()
+    // TODO isEqualTo()
+    // TODO isInSameYearAs()
+    // TODO isInSameMonthAs()
+    // TODO isOnSameDayAs()
+    // TODO isInSameHourAs()
+    // TODO isInSameMinuteAs()
+    // TODO isInSameSecondAs()
 }

@@ -116,16 +116,16 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
      */
     protected function compareGregorian(DateTimeContract $other): int
     {
-        return $this->year <=> $other->year()
-            ?: $this->month->value <=> $other->month()->value
-            ?: $this->day <=> $other->day()
-            ?: $this->hour <=> $other->hour()
-            ?: $this->minute <=> $other->minute()
-            ?: $this->second <=> $other->second()
-            ?: $this->millisecond <=> $other->millisecond();
+        return ($this->year <=> $other->year())
+            ?: ($this->month->value <=> $other->month()->value)
+            ?: ($this->day <=> $other->day())
+            ?: ($this->hour <=> $other->hour())
+            ?: ($this->minute <=> $other->minute())
+            ?: ($this->second <=> $other->second())
+            ?: ($this->millisecond <=> $other->millisecond());
     }
 
-    protected function compareUnix(self $other): int
+    protected function compareUnix(DateTimeContract $other): int
     {
         return $this->unixMs <=> $other->unixTimestampMs();
     }
@@ -148,7 +148,8 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         return 0 !== ($this->clean & self::CleanGregorian);
     }
 
-    protected final function millisecondsBackFromEpoch(): int
+    /** Helper for syncUnix() to calculate how many milliseconds a Gregorian date-time is before the epoch. */
+    protected final function millisecondsBeforeEpoch(): int
     {
         $epoch = UnixEpoch::dateTime();
         assert($this->isGregorianClean(), new LogicException("Expected DateTime to be Gregorian clean"));
@@ -181,7 +182,8 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         return $milliseconds;
     }
 
-    protected final function millisecondsFromEpoch(): int
+    /** Helper for syncUnix() to calculate how many milliseconds a Gregorian date-time is after the epoch. */
+    protected final function millisecondsAfterEpoch(): int
     {
         $epoch = UnixEpoch::dateTime();
 
@@ -215,9 +217,9 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     protected final function syncUnix(): void
     {
         if (0 < UnixEpoch::dateTime()->compareGregorian($this)) {
-            $this->unixMs = -$this->millisecondsBackFromEpoch();
+            $this->unixMs = -$this->millisecondsBeforeEpoch();
         } else {
-            $this->unixMs = $this->millisecondsFromEpoch();
+            $this->unixMs = $this->millisecondsAfterEpoch();
         }
 
         $this->clean |= self::CleanUnix;
