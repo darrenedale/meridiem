@@ -165,17 +165,17 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         $milliseconds += GregorianRatios::MillisecondsPerHour * (self::MaxHour - $this->hour);
         $milliseconds += GregorianRatios::MillisecondsPerMinute * (self::MaxMinute - $this->minute);
         $milliseconds += GregorianRatios::MillisecondsPerSecond * (self::MaxSecond - $this->second);
-        $milliseconds += 1000 - $this->millisecond;
+        $milliseconds += GregorianRatios::MillisecondsPerSecond - $this->millisecond;
 
         // add a day for each leap year between the dates
-        for ($year = $epoch->year; $year > $this->year; --$year) {
+        for ($year = $epoch->year - 1; $year > $this->year; --$year) {
             if (self::isLeapYear($year)) {
                 $milliseconds += GregorianRatios::MillisecondsPerDay;
             }
         }
         
         // and the to year, if the date is before 29th Feb
-        if (self::isLeapYear($this->year) && ($this->month->value < 2 || ($this->month === Month::February && $this->day < 29))) {
+        if (self::isLeapYear($this->year) && ($this->month->isBefore(Month::February) || (Month::February === $this->month && $this->day < 29))) {
             $milliseconds += GregorianRatios::MillisecondsPerDay;
         }
 
@@ -669,6 +669,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
 
         $clone = clone $this;
         $clone->timeZone = $timeZone;
+        $clone->clean &= ~self::CleanGregorian;
         return $clone;
     }
 

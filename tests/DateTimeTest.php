@@ -12,6 +12,7 @@ use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\DateTime;
 use Meridiem\Month;
 use InvalidArgumentException;
+use Meridiem\PhpDateTimeFormatter;
 use Meridiem\TimeZone;
 use Meridiem\UnixEpoch;
 use Mockery;
@@ -184,34 +185,122 @@ class DateTimeTest extends TestCase
         }
     }
 
-    public static function dataForTestCreate1(): iterable
+    public static function gregorianComponentsWithTimestamps(): iterable
     {
         $utc = TimeZone::lookup("UTC");
-        yield "typical" => [2025, Month::April, 23, 13, 21, 7, 165, $utc];
+        yield "typical" => [2025, Month::April, 23, 13, 21, 7, 165, $utc, 1745414467165];
+
+        $timestamps = [
+            1609470848883, 1359676363901,   // January 1/31
+            1612149248883, 1362095563901,   // February 1/28
+            1614568448883, 1364773963901,   // March 1/31
+            1617246848883, 1367365963901,   // April 1/30
+            1619838848883, 1370044363901,   // May 1/31
+            1622517248883, 1372636363901,   // June 1/30
+            1625109248883, 1375314763901,   // July 1/31
+            1627787648883, 1377993163901,   // August 1/31
+            1630466048883, 1380585163901,   // September 1/30
+            1633058048883, 1383263563901,   // October 1/31
+            1635736448883, 1385855563901,   // November 1/30
+            1638328448883, 1388533963901,   // December 1/31
+        ];
 
         foreach (Month::cases() as $month) {
-            yield "first-{$month->name}" => [2021, $month, 1, 3, 14, 8, 883, $utc];
-            yield "last-{$month->name}" => [2013, $month, $month->dayCount(2025), 23, 52, 43, 901, $utc];
+            yield "first-{$month->name}" => [2021, $month, 1, 3, 14, 8, 883, $utc, array_shift($timestamps)];
+            yield "last-{$month->name}" => [2013, $month, $month->dayCount(2025), 23, 52, 43, 901, $utc, array_shift($timestamps)];
         }
+
+        $timestamps = [
+            742780800000, 859683599999,     // Hour 00
+            742784400000, 859687199999,
+            742788000000, 859690799999,
+            742791600000, 859694399999,
+            742795200000, 859697999999,
+            742798800000, 859701599999,     // Hour 05
+            742802400000, 859705199999,
+            742806000000, 859708799999,
+            742809600000, 859712399999,
+            742813200000, 859715999999,
+            742816800000, 859719599999,     // Hour 10
+            742820400000, 859723199999,
+            742824000000, 859726799999,
+            742827600000, 859730399999,
+            742831200000, 859733999999,
+            742834800000, 859737599999,     // Hour 15
+            742838400000, 859741199999,
+            742842000000, 859744799999,
+            742845600000, 859748399999,
+            742849200000, 859751999999,
+            742852800000, 859755599999,     // Hour 20
+            742856400000, 859759199999,
+            742860000000, 859762799999,
+            742863600000, 859766399999,     // Hour 23
+        ];
 
         for ($hour = 0; $hour < 24; ++$hour) {
-            yield "start-hour-" . sprintf("%02d", $hour) => [1993, Month::July, 16, $hour, 0, 0, 0, $utc];
-            yield "end-hour-" . sprintf("%02d", $hour) => [1997, Month::March, 30, $hour, 59, 59, 999, $utc];
+            yield sprintf("start-hour-%02d", $hour) => [1993, Month::July, 16, $hour, 0, 0, 0, $utc, array_shift($timestamps)];
+            yield sprintf("end-hour-%02d", $hour) => [1997, Month::March, 30, $hour, 59, 59, 999, $utc, array_shift($timestamps)];
         }
+
+        $timestamps = [
+            621612000000, 350506859999, 621612060000, 350506919999, 621612120000, 350506979999,     // Minutes 00-02
+            621612180000, 350507039999, 621612240000, 350507099999, 621612300000, 350507159999,
+            621612360000, 350507219999, 621612420000, 350507279999, 621612480000, 350507339999,
+            621612540000, 350507399999, 621612600000, 350507459999, 621612660000, 350507519999,
+            621612720000, 350507579999, 621612780000, 350507639999, 621612840000, 350507699999,
+            621612900000, 350507759999, 621612960000, 350507819999, 621613020000, 350507879999,     // Minutes 15-17
+            621613080000, 350507939999, 621613140000, 350507999999, 621613200000, 350508059999,
+            621613260000, 350508119999, 621613320000, 350508179999, 621613380000, 350508239999,
+            621613440000, 350508299999, 621613500000, 350508359999, 621613560000, 350508419999,
+            621613620000, 350508479999, 621613680000, 350508539999, 621613740000, 350508599999,
+            621613800000, 350508659999, 621613860000, 350508719999, 621613920000, 350508779999,     // Minutes 30-32
+            621613980000, 350508839999, 621614040000, 350508899999, 621614100000, 350508959999,
+            621614160000, 350509019999, 621614220000, 350509079999, 621614280000, 350509139999,
+            621614340000, 350509199999, 621614400000, 350509259999, 621614460000, 350509319999,
+            621614520000, 350509379999, 621614580000, 350509439999, 621614640000, 350509499999,
+            621614700000, 350509559999, 621614760000, 350509619999, 621614820000, 350509679999,     // Minutes 45-47
+            621614880000, 350509739999, 621614940000, 350509799999, 621615000000, 350509859999,
+            621615060000, 350509919999, 621615120000, 350509979999, 621615180000, 350510039999,
+            621615240000, 350510099999, 621615300000, 350510159999, 621615360000, 350510219999,
+            621615420000, 350510279999, 621615480000, 350510339999, 621615540000, 350510399999,
+        ];
 
         for ($minute = 0; $minute < 60; ++$minute) {
-            yield "start-minute-" . sprintf("%02d", $minute) => [1989, Month::September, 12, 14, $minute, 0, 0, $utc];
-            yield "end-minute-" . sprintf("%02d", $minute) => [1981, Month::February, 8, 19, $minute, 59, 999, $utc];
+            yield sprintf("start-minute-%02d", $minute) => [1989, Month::September, 12, 14, $minute, 0, 0, $utc, array_shift($timestamps)];
+            yield sprintf("end-minute-%02d", $minute) => [1981, Month::February, 8, 19, $minute, 59, 999, $utc, array_shift($timestamps)];
         }
+
+        $timestamps = [
+            -597874380000, -99142019001, -597874379000, -99142018001, -597874378000, -99142017001,      // Seconds 00-02
+            -597874377000, -99142016001, -597874376000, -99142015001, -597874375000, -99142014001,
+            -597874374000, -99142013001, -597874373000, -99142012001, -597874372000, -99142011001,
+            -597874371000, -99142010001, -597874370000, -99142009001, -597874369000, -99142008001,
+            -597874368000, -99142007001, -597874367000, -99142006001, -597874366000, -99142005001,
+            -597874365000, -99142004001, -597874364000, -99142003001, -597874363000, -99142002001,      // Seconds 15-07
+            -597874362000, -99142001001, -597874361000, -99142000001, -597874360000, -99141999001,
+            -597874359000, -99141998001, -597874358000, -99141997001, -597874357000, -99141996001,
+            -597874356000, -99141995001, -597874355000, -99141994001, -597874354000, -99141993001,
+            -597874353000, -99141992001, -597874352000, -99141991001, -597874351000, -99141990001,
+            -597874350000, -99141989001, -597874349000, -99141988001, -597874348000, -99141987001,      // Seconds 30-32
+            -597874347000, -99141986001, -597874346000, -99141985001, -597874345000, -99141984001,
+            -597874344000, -99141983001, -597874343000, -99141982001, -597874342000, -99141981001,
+            -597874341000, -99141980001, -597874340000, -99141979001, -597874339000, -99141978001,
+            -597874338000, -99141977001, -597874337000, -99141976001, -597874336000, -99141975001,
+            -597874335000, -99141974001, -597874334000, -99141973001, -597874333000, -99141972001,      // Seconds 45-47
+            -597874332000, -99141971001, -597874331000, -99141970001, -597874330000, -99141969001,
+            -597874329000, -99141968001, -597874328000, -99141967001, -597874327000, -99141966001,
+            -597874326000, -99141965001, -597874325000, -99141964001, -597874324000, -99141963001,
+            -597874323000, -99141962001, -597874322000, -99141961001, -597874321000, -99141960001,
+        ];
 
         for ($second = 0; $second < 60; ++$second) {
-            yield "start-second-" . sprintf("%02d", $second) => [1951, Month::January, 21, 3, 47, $second, 0, $utc];
-            yield "end-second-" . sprintf("%02d", $second) => [1966, Month::November, 10, 12, 33, $second, 999, $utc];
+            yield "start-second-" . sprintf("%02d", $second) => [1951, Month::January, 21, 3, 47, $second, 0, $utc, array_shift($timestamps)];
+            yield "end-second-" . sprintf("%02d", $second) => [1966, Month::November, 10, 12, 33, $second, 999, $utc, array_shift($timestamps)];
         }
-
-//        yield "timezone-europe-london" => [1975, Month::May, 18, 5, 28, 14, 311, new DateTimeZone("Europe/London")];
-        yield "timezone-+0400" => [2001, Month::October, 23, 22, 01, 19, 170, TimeZone::parse("+0400")];
-        yield "timezone--0330" => [2001, Month::March, 23, 22, 01, 19, 170, TimeZone::parse("-0330")];
+// TODO get timestamps for Gregorian dates in these timezones to enable tests
+////        yield "timezone-europe-london" => [1975, Month::May, 18, 5, 28, 14, 311, new DateTimeZone("Europe/London")];
+//        yield "timezone-+0400" => [2001, Month::October, 23, 22, 01, 19, 170, TimeZone::parse("+0400")];
+//        yield "timezone--0330" => [2001, Month::March, 23, 22, 01, 19, 170, TimeZone::parse("-0330")];
     }
 
     /** DateTimes each paired with a second DateTime whose Gregorian properties are after the first. */
@@ -316,8 +405,12 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Ensure we can create accurate DateTime instances from date-time components. */
-    #[DataProvider("dataForTestCreate1")]
+    /**
+     * Ensure we can create accurate DateTime instances from date-time components.
+     *
+     * NOTE the timestamp from the data provider is intentionally ignored.
+     */
+    #[DataProvider("gregorianComponentsWithTimestamps")]
     public function testCreate1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, TimeZone $timeZone): void
     {
         $actual = DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone);
@@ -926,6 +1019,16 @@ class DateTimeTest extends TestCase
         self::assertTrue((new XRay($dateTime))->isGregorianClean());
     }
 
+    /** Ensure a DateTime is not Gregorian-clean when a timezone is set. */
+    public function testIsGregorianClean5(): void
+    {
+        $dateTime = DateTime::create(2025, Month::February, 26, 20, 19, 52, 123);
+        self::assertTrue((new XRay($dateTime))->isGregorianClean());
+        self::assertNotSame("Europe/London", $dateTime->timeZone()->name());
+        $dateTime = $dateTime->withTimeZone(TimeZone::lookup("Europe/London"));
+        self::assertFalse((new XRay($dateTime))->isGregorianClean());
+    }
+
     /** Ensure clones retain the original's properties. */
     public function testClone1(): void
     {
@@ -1138,8 +1241,17 @@ class DateTimeTest extends TestCase
         $dateTime->syncUnix();
         self::assertTrue($dateTime->isUnixClean());
     }
-    
-    // TODO isGregorianClean()
+
+    /** Ensure syncUnix() correctly synchronises the Unix timestamp. */
+    #[DataProvider("gregorianComponentsWithTimestamps")]
+    public function testSyncUnix(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, \Meridiem\Contracts\TimeZone $timeZone, int $expectedTimestampMs): void
+    {
+        $dateTime = new XRay(DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone));
+        self::assertFalse($dateTime->isUnixClean());
+        $dateTime->syncUnix();
+        self::assertSame($expectedTimestampMs, $dateTime->unixMs, "Expected {$expectedTimestampMs}, found {$dateTime->unixMs}");
+    }
+
     // TODO millisecondsBeforeEpoch()
     // TODO millisecondsAfterEpoch()
     // TODO syncUnix()
