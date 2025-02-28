@@ -5,7 +5,6 @@ namespace MeridiemTests;
 use Meridiem\Month;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Month::class)]
 class MonthTest extends TestCase

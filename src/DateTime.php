@@ -84,6 +84,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             $this->timeZone = TimeZone::lookup(self::DefaultTimeZone);
             $this->clean = self::CleanUnix;
         } else {
+            // TODO these should be runtime exceptions
             assert(self::MinYear <= $yearOrUnixMs && self::MaxYear >= $yearOrUnixMs, new InvalidArgumentException("Expected year between -9999 and 9999 inclusive, found {$yearOrUnixMs}"));
             assert(self::MinDay <= $day && $month->dayCount($yearOrUnixMs) >= $day, new InvalidArgumentException("Expected day between 1 and {$month->dayCount($yearOrUnixMs)} inclusive, found {$day}"));
             assert(self::MinHour <= $hour && self::MaxHour >= $hour, new InvalidArgumentException("Expected hour between 0 and 23 inclusive, found {$hour}"));
@@ -179,7 +180,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             $milliseconds += GregorianRatios::MillisecondsPerDay;
         }
 
-        return $milliseconds;
+        return $milliseconds - $this->timeZone->offset($this)->offsetMilliseconds();
     }
 
     /** Helper for syncUnix() to calculate how many milliseconds a Gregorian date-time is after the epoch. */
@@ -210,7 +211,8 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             + $this->hour * GregorianRatios::MillisecondsPerHour
             + $this->minute * GregorianRatios::MillisecondsPerMinute
             + $this->second * GregorianRatios::MillisecondsPerSecond
-            + $this->millisecond;
+            + $this->millisecond
+            - $this->timeZone->offset($this)->offsetMilliseconds();
     }
 
     /** Helper to bring the Unix timestamp into sync with the Gregorian calendar properties. */
@@ -331,6 +333,17 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             $ms -= $yearMs;
         } while (true);
 
+        if (0 === $ms) {
+            $this->year = $year + 1;
+            $this->month = Month::January;
+            $this->day = 1;
+            $this->hour = 0;
+            $this->minute = 0;
+            $this->second = 0;
+            $this->millisecond = 0;
+            return;
+        }
+
         foreach (array_reverse(Month::cases()) as $month) {
             $monthMs = (GregorianRatios::MillisecondsPerDay * $month->dayCount($year));
 
@@ -449,16 +462,21 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
      */
     public static function now(): self
     {
-        return new self((int) (microtime(true) * GregorianRatios::MillisecondsPerSecond));
+        // always round down - to do otherwise would be to say the time's reached a given millisecond before it has
+        return new self((int) floor(
+            microtime(true) * (float) GregorianRatios::MillisecondsPerSecond,
+        ));
     }
 
     /** Create a new DateTime with the time from the current DateTime and a specified date. */
     public function withDate(int $year, Month $month, int $day): static
     {
+        // TODO these should be runtime exceptions
         assert(self::MinYear <= $year && self::MaxYear >= $year, new InvalidArgumentException("Expected year between -9999 and 9999 inclusive, found {$year}"));
         assert(self::MinDay <= $day && $month->dayCount($year) >= $day, new InvalidArgumentException("Expected day between 1 and {$month->dayCount($year)} inclusive, found {$day}"));
 
         if (!$this->isGregorianClean()) {
+            // Ensure Gregorian time is correct when date components are set
             $this->syncGregorian();
         }
 
@@ -466,7 +484,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         $clone->year = $year;
         $clone->month = $month;
         $clone->day = $day;
-        $this->clean = self::CleanGregorian;
+        $clone->clean &= ~self::CleanUnix;
         return $clone;
     }
 
@@ -500,10 +518,16 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         return $this->day;
     }
 
+    /** Fetch the weekday of the point in time. */
     public function weekday(): Weekday
     {
         $daysSinceEpoch = (int) floor($this->unixTimestampMs() / GregorianRatios::MillisecondsPerDay);
         $weekday = (UnixEpoch::Weekday->value + $daysSinceEpoch) % 7;
+
+        if (0 > $weekday) {
+            $weekday += 7;
+        }
+
         return Weekday::from($weekday);
     }
 
@@ -521,12 +545,14 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
      */
     public function withTime(int $hour, int $minute, int $second = 0, int $millisecond = 0): static
     {
+        // TODO these should be runtime exceptions
         assert(self::MinHour <= $hour && self::MaxHour >= $hour, new InvalidArgumentException("Expected hour between 0 and 23 inclusive, found {$hour}"));
         assert(self::MinMinute <= $minute && self::MaxMinute >= $minute, new InvalidArgumentException("Expected minute between 0 and 59 inclusive, found {$minute}"));
         assert(self::MinSecond <= $second && self::MaxSecond >= $second, new InvalidArgumentException("Expected second between 0 and 59 inclusive, found {$second}"));
         assert(self::MinMillisecond <= $millisecond && self::MaxMillisecond >= $millisecond, new InvalidArgumentException("Expected millisecond between 0 and 999 inclusive, found {$millisecond}"));
 
         if (!$this->isGregorianClean()) {
+            // Ensure Gregorian date is correct when time components are set
             $this->syncGregorian();
         }
 
@@ -535,22 +561,24 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         $clone->minute = $minute;
         $clone->second = $second;
         $clone->millisecond = $millisecond;
-        $this->clean = self::CleanGregorian;
+        $clone->clean &= ~self::CleanUnix;
         return $clone;
     }
 
     /** Create a new DateTime with the date and time from the current DateTime, but with a specified hour. */
     public function withHour(int $hour): static
     {
+        // TODO these should be runtime exceptions
         assert(self::MinHour <= $hour && self::MaxHour >= $hour, new InvalidArgumentException("Expected hour between 0 and 23 inclusive, found {$hour}"));
 
         if (!$this->isGregorianClean()) {
+            // Ensure other Gregorian components are correct when hour is set
             $this->syncGregorian();
         }
 
         $clone = clone $this;
         $clone->hour = $hour;
-        $this->clean = self::CleanGregorian;
+        $clone->clean &= ~self::CleanUnix;
         return $clone;
     }
 
@@ -566,15 +594,17 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     /** Create a new DateTime with the date and time from the current DateTime, but with a specified minute. */
     public function withMinute(int $minute): static
     {
+        // TODO these should be runtime exceptions
         assert(self::MinMinute <= $minute && self::MaxMinute >= $minute, new InvalidArgumentException("Expected minute between 0 and 59 inclusive, found {$minute}"));
 
         if (!$this->isGregorianClean()) {
+            // Ensure other Gregorian components are correct when minute is set
             $this->syncGregorian();
         }
 
         $clone = clone $this;
         $clone->minute = $minute;
-        $this->clean = self::CleanGregorian;
+        $clone->clean &= ~self::CleanUnix;
         return $clone;
     }
 
@@ -590,15 +620,17 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     /** Create a new DateTime with the date and time from the current DateTime, but with a specified second. */
     public function withSecond(int $second): static
     {
+        // TODO these should be runtime exceptions
         assert(self::MinSecond <= $second && self::MaxSecond >= $second, new InvalidArgumentException("Expected second between 0 and 59 inclusive, found {$second}"));
 
         if (!$this->isGregorianClean()) {
+            // Ensure other Gregorian components are correct when second is set
             $this->syncGregorian();
         }
 
         $clone = clone $this;
         $clone->second = $second;
-        $this->clean = self::CleanGregorian;
+        $clone->clean &= ~self::CleanUnix;
         return $clone;
     }
 
@@ -614,15 +646,17 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     /** Create a new DateTime with the date and time from the current DateTime, but with a specified millisecond. */
     public function withMillisecond(int $millisecond): static
     {
+        // TODO these should be runtime exceptions
         assert(self::MinMillisecond <= $millisecond && self::MaxMillisecond >= $millisecond, new InvalidArgumentException("Expected millisecond between 0 and 999 inclusive, found {$millisecond}"));
 
         if (!$this->isGregorianClean()) {
+            // Ensure other Gregorian components are correct when millisecond is set
             $this->syncGregorian();
         }
 
         $clone = clone $this;
         $clone->millisecond = $millisecond;
-        $this->clean = self::CleanGregorian;
+        $clone->clean &= ~self::CleanUnix;
         return $clone;
     }
 

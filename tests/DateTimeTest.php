@@ -10,15 +10,16 @@ use Equit\XRay\StaticXRay;
 use Equit\XRay\XRay;
 use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\DateTime;
+use Meridiem\GregorianRatios;
 use Meridiem\Month;
 use InvalidArgumentException;
 use Meridiem\PhpDateTimeFormatter;
 use Meridiem\TimeZone;
 use Meridiem\UnixEpoch;
+use Meridiem\Weekday;
 use Mockery;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 
 #[CoversClass(DateTime::class)]
 class DateTimeTest extends TestCase
@@ -52,35 +53,38 @@ class DateTimeTest extends TestCase
         yield "max-int" => [PHP_INT_MAX];
     }
 
+    /** All valid years. */
     public static function validYears(): iterable
     {
         for ($year = -9999; $year <= 9999; ++$year) {
-            yield (string) $year => [$year];
+            yield sprintf("year-%04d", $year) => [$year];
         }
     }
 
+    /** A selection of leap years. */
     public static function leapYears(): iterable
     {
         for ($year = 1904; $year < 2100; $year += 4) {
-            yield (string) $year => [$year];
+            yield sprintf("leap-year-%04d", $year) => [$year];
         }
 
         for ($year = 2104; $year < 2200; $year += 4) {
-            yield (string) $year => [$year];
+            yield sprintf("leap-year-%04d", $year) => [$year];
         }
 
         for ($year = 2204; $year < 2300; $year += 4) {
-            yield (string) $year => [$year];
+            yield sprintf("leap-year-%04d", $year) => [$year];
         }
 
         for ($year = 2304; $year <= 2400; $year += 4) {
-            yield (string) $year => [$year];
+            yield sprintf("leap-year-%04d", $year) => [$year];
         }
     }
 
+    /** A selection of non-leap years. */
     public static function nonLeapYears(): iterable
     {
-        yield "1900" => [1900];
+        yield "non-leap-year-1900" => [1900];
         $skip = 0;
 
         for ($year = 1904; $year < 2100; ++$year) {
@@ -88,10 +92,10 @@ class DateTimeTest extends TestCase
                 continue;
             }
 
-            yield (string) $year => [$year];
+            yield sprintf("non-leap-year-%04d", $year) => [$year];
         }
 
-        yield "2100" => [2100];
+        yield "non-leap-year-2100" => [2100];
         $skip = 0;
 
         for ($year = 2104; $year < 2200; ++$year) {
@@ -99,10 +103,10 @@ class DateTimeTest extends TestCase
                 continue;
             }
 
-            yield (string) $year => [$year];
+            yield sprintf("non-leap-year-%04d", $year) => [$year];
         }
 
-        yield "2200" => [2200];
+        yield "non-leap-year-2200" => [2200];
         $skip = 0;
 
         for ($year = 2204; $year < 2300; ++$year) {
@@ -110,10 +114,10 @@ class DateTimeTest extends TestCase
                 continue;
             }
 
-            yield (string) $year => [$year];
+            yield sprintf("non-leap-year-%04d", $year) => [$year];
         }
 
-        yield "2300" => [2300];
+        yield "non-leap-year-2300" => [2300];
         $skip = 0;
 
         for ($year = 2304; $year <= 2400; ++$year) {
@@ -121,10 +125,19 @@ class DateTimeTest extends TestCase
                 continue;
             }
 
-            yield (string) $year => [$year];
+            yield sprintf("non-leap-year-%04d", $year) => [$year];
         }
     }
 
+    /** All the Month enumeration cases. */
+    public static function allMonths(): iterable
+    {
+        foreach (Month::cases() as $month) {
+            yield sprintf("month-%02d-%s", $month->value, $month->name) => [$month];
+        }
+    }
+
+    /** Some invalid hours. */
     public static function invalidHours(): iterable
     {
         yield "too-small" => [-1];
@@ -133,13 +146,15 @@ class DateTimeTest extends TestCase
         yield "max-int" => [PHP_INT_MAX];
     }
 
+    /** All valid hours. */
     public static function validHours(): iterable
     {
         for ($hour = 0; $hour < 24; ++$hour) {
-            yield (string) $hour => [$hour];
+            yield sprintf("hour-%02d", $hour) => [$hour];
         }
     }
 
+    /** Some invalid minutes. */
     public static function invalidMinutes(): iterable
     {
         yield "too-small" => [-1];
@@ -148,13 +163,15 @@ class DateTimeTest extends TestCase
         yield "max-int" => [PHP_INT_MAX];
     }
 
+    /** All valid minutes. */
     public static function validMinutes(): iterable
     {
         for ($minute = 0; $minute < 60; ++$minute) {
-            yield (string) $minute => [$minute];
+            yield sprintf("minute-%02d", $minute) => [$minute];
         }
     }
 
+    /** Some invalid seconds. */
     public static function invalidSeconds(): iterable
     {
         yield "too-small" => [-1];
@@ -163,13 +180,15 @@ class DateTimeTest extends TestCase
         yield "max-int" => [PHP_INT_MAX];
     }
 
+    /** All valid seconds. */
     public static function validSeconds(): iterable
     {
         for ($second = 0; $second < 60; ++$second) {
-            yield (string) $second => [$second];
+            yield sprintf("second-%02d", $second) => [$second];
         }
     }
 
+    /** Some invalid milliseconds. */
     public static function invalidMilliseconds(): iterable
     {
         yield "too-small" => [-1];
@@ -178,17 +197,39 @@ class DateTimeTest extends TestCase
         yield "max-int" => [PHP_INT_MAX];
     }
 
+    /** All valid milliseconds. */
     public static function validMilliseconds(): iterable
     {
         for ($millisecond = 0; $millisecond < 1000; ++$millisecond) {
-            yield (string) $millisecond => [$millisecond];
+            yield sprintf("millisecond-%02d", $millisecond) => [$millisecond];
         }
     }
 
-    public static function gregorianComponentsWithTimestamps(): iterable
+    /** The month and day for every day of a leap year. */
+    public static function everyLeapYearDay(): iterable
+    {
+        foreach (Month::cases() as $month) {
+            for ($day = 1; $day < $month->dayCount(2000); ++$day) {
+                yield sprintf("leap-year-day-%02d-%s-%02d", $month->value, $month->name, $day) => [2000, $month, $day];
+            }
+        }
+    }
+
+    /** The month and day for every day of a non-leap year. */
+    public static function everyNonLeapYearDay(): iterable
+    {
+        foreach (Month::cases() as $month) {
+            for ($day = 1; $day < $month->dayCount(2025); ++$day) {
+                yield sprintf("non-leap-year-day-%02d-%s-%02d", $month->value, $month->name, $day) => [2025, $month, $day];
+            }
+        }
+    }
+
+    /** Some Gregorian date-times and their equivalent Unix millisecond timestamps. */
+    public static function gregorianComponentsWithMillisecondTimestamps(): iterable
     {
         $utc = TimeZone::lookup("UTC");
-        yield "typical" => [2025, Month::April, 23, 13, 21, 7, 165, $utc, 1745414467165];
+        yield "typical-ms-timestamp" => [2025, Month::April, 23, 13, 21, 7, 165, $utc, 1745414467165];
 
         $timestamps = [
             1609470848883, 1359676363901,   // January 1/31
@@ -206,8 +247,8 @@ class DateTimeTest extends TestCase
         ];
 
         foreach (Month::cases() as $month) {
-            yield "first-{$month->name}" => [2021, $month, 1, 3, 14, 8, 883, $utc, array_shift($timestamps)];
-            yield "last-{$month->name}" => [2013, $month, $month->dayCount(2025), 23, 52, 43, 901, $utc, array_shift($timestamps)];
+            yield "first-{$month->name}-ms-timestamp" => [2021, $month, 1, 3, 14, 8, 883, $utc, array_shift($timestamps)];
+            yield "last-{$month->name}-ms-timestamp" => [2013, $month, $month->dayCount(2025), 23, 52, 43, 901, $utc, array_shift($timestamps)];
         }
 
         $timestamps = [
@@ -238,8 +279,8 @@ class DateTimeTest extends TestCase
         ];
 
         for ($hour = 0; $hour < 24; ++$hour) {
-            yield sprintf("start-hour-%02d", $hour) => [1993, Month::July, 16, $hour, 0, 0, 0, $utc, array_shift($timestamps)];
-            yield sprintf("end-hour-%02d", $hour) => [1997, Month::March, 30, $hour, 59, 59, 999, $utc, array_shift($timestamps)];
+            yield sprintf("start-hour-%02d-ms-timestamp", $hour) => [1993, Month::July, 16, $hour, 0, 0, 0, $utc, array_shift($timestamps)];
+            yield sprintf("end-hour-%02d-ms-timestamp", $hour) => [1997, Month::March, 30, $hour, 59, 59, 999, $utc, array_shift($timestamps)];
         }
 
         $timestamps = [
@@ -266,8 +307,8 @@ class DateTimeTest extends TestCase
         ];
 
         for ($minute = 0; $minute < 60; ++$minute) {
-            yield sprintf("start-minute-%02d", $minute) => [1989, Month::September, 12, 14, $minute, 0, 0, $utc, array_shift($timestamps)];
-            yield sprintf("end-minute-%02d", $minute) => [1981, Month::February, 8, 19, $minute, 59, 999, $utc, array_shift($timestamps)];
+            yield sprintf("start-minute-%02d-ms-timestamp", $minute) => [1989, Month::September, 12, 14, $minute, 0, 0, $utc, array_shift($timestamps)];
+            yield sprintf("end-minute-%02d-ms-timestamp", $minute) => [1981, Month::February, 8, 19, $minute, 59, 999, $utc, array_shift($timestamps)];
         }
 
         $timestamps = [
@@ -294,13 +335,21 @@ class DateTimeTest extends TestCase
         ];
 
         for ($second = 0; $second < 60; ++$second) {
-            yield "start-second-" . sprintf("%02d", $second) => [1951, Month::January, 21, 3, 47, $second, 0, $utc, array_shift($timestamps)];
-            yield "end-second-" . sprintf("%02d", $second) => [1966, Month::November, 10, 12, 33, $second, 999, $utc, array_shift($timestamps)];
+            yield sprintf("start-second-%02d-ms-timestamp", $second) => [1951, Month::January, 21, 3, 47, $second, 0, $utc, array_shift($timestamps)];
+            yield sprintf("end-second-%02d-ms-timestamp", $second) => [1966, Month::November, 10, 12, 33, $second, 999, $utc, array_shift($timestamps)];
         }
-// TODO get timestamps for Gregorian dates in these timezones to enable tests
-////        yield "timezone-europe-london" => [1975, Month::May, 18, 5, 28, 14, 311, new DateTimeZone("Europe/London")];
-//        yield "timezone-+0400" => [2001, Month::October, 23, 22, 01, 19, 170, TimeZone::parse("+0400")];
-//        yield "timezone--0330" => [2001, Month::March, 23, 22, 01, 19, 170, TimeZone::parse("-0330")];
+//        yield "timezone-europe-london" => [1975, Month::May, 18, 5, 28, 14, 311, new DateTimeZone("Europe/London")];
+        yield "timezone-+0400-ms-timestamp" => [2001, Month::October, 23, 22, 01, 19, 170, TimeZone::parse("+0400"), 1003860079170];
+        yield "timezone--0330-ms-timestamp" => [2001, Month::March, 23, 22, 01, 19, 170, TimeZone::parse("-0330", ), 985397479170];
+    }
+
+    /** Some Gregorian date-times and their equivalent Unix timestamps. */
+    public static function gregorianComponentsWithTimestamps(): iterable
+    {
+        foreach (self::gregorianComponentsWithMillisecondTimestamps() as $key => $arguments) {
+            $arguments[8] = (int) floor($arguments[8] / 1000.0);
+            yield str_replace("-ms-timestamp", "-timestamp", $key) => $arguments;
+        }
     }
 
     /** DateTimes each paired with a second DateTime whose Gregorian properties are after the first. */
@@ -351,6 +400,13 @@ class DateTimeTest extends TestCase
 
         // 1963-02-15T10:00:38.000Z <=> 1962-02-15T10:00:38.000Z
         yield "gregorian-1-year-earlier" => [-217000762000, -248536762000];
+    }
+
+    /** Unix millisecond timestamps paired with others that are not the same. */
+    public static function unequalUnixMillisecondTimestamps(): iterable
+    {
+        yield from self::dateTimesAndEarlierDateTimes();
+        yield from self::dateTimesAndLaterDateTimes();
     }
 
     /**
@@ -405,63 +461,27 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /**
-     * Ensure we can create accurate DateTime instances from date-time components.
-     *
-     * NOTE the timestamp from the data provider is intentionally ignored.
-     */
-    #[DataProvider("gregorianComponentsWithTimestamps")]
-    public function testCreate1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, TimeZone $timeZone): void
+    /** DateTime instances paired with other contract implementations that are not equal. */
+    public static function dateTimesAndUnequalOtherImplementations(): iterable
     {
-        $actual = DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone);
-        self::assertSame($year, $actual->year());
-        self::assertSame($month, $actual->month());
-        self::assertSame($day, $actual->day());
-        self::assertSame($hour, $actual->hour());
-        self::assertSame($minute, $actual->minute());
-        self::assertSame($second, $actual->second());
-        self::assertSame($millisecond, $actual->millisecond());
-        self::assertSame($timeZone->name(), $actual->timeZone()->name());
+        yield from self::dateTimesAndEarlierAlternativeDateTimes();
+        yield from self::dateTimesAndLaterAlternativeDateTimes();
     }
 
-    /** Ensure we can create dates in leap years. */
-    #[DataProvider("leapYears")]
-    public function testCreate2(int $year): void
+    /** A selection of Gregorian date components with invalid days. */
+    public static function gregorianComponentsInvalidDays(): iterable
     {
-        $actual = DateTime::create($year, Month::February, 1);
-        self::assertSame($year, $actual->year());
-        self::assertSame(Month::February, $actual->month());
-        self::assertSame(1, $actual->day());
-        $actual = DateTime::create($year, Month::February, 29);
-        self::assertSame($year, $actual->year());
-        self::assertSame(Month::February, $actual->month());
-        self::assertSame(29, $actual->day());
-        $actual = DateTime::create($year, Month::March, 1);
-        self::assertSame($year, $actual->year());
-        self::assertSame(Month::March, $actual->month());
-        self::assertSame(1, $actual->day());
+        foreach ([2000, 2025] as $year) {
+            foreach (Month::cases() as $month) {
+                yield "{$year}-{$month->name}-negative" => [$year, $month, -1];
+                yield "{$year}-{$month->name}-zero" => [$year, $month, 0];
+                yield "{$year}-{$month->name}-too-high" => [$year, $month, $month->dayCount($year) + 1];
+            }
+        }
     }
 
-    /** Ensure non-leap years don't accept 29th Feb. */
-    #[DataProvider("nonLeapYears")]
-    public function testCreate3(int $year): void
-    {
-        $actual = DateTime::create($year, Month::February, 1);
-        self::assertSame($year, $actual->year());
-        self::assertSame(Month::February, $actual->month());
-        self::assertSame(1, $actual->day());
-
-        $actual = DateTime::create($year, Month::February, 28);
-        self::assertSame($year, $actual->year());
-        self::assertSame(Month::February, $actual->month());
-        self::assertSame(28, $actual->day());
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Expected day between 1 and 28 inclusive, found 29");
-        DateTime::create($year, Month::February, 29);
-    }
-
-    public static function dataForTestCreate4(): iterable
+    /** Gregorian components for all valid days in a non-leap year.*/
+    public static function validGregorianComponentsNonLeapYear(): iterable
     {
         foreach (Month::cases() as $month) {
             for ($day = 1; $day <= $month->dayCount(2025); $day++) {
@@ -470,36 +490,8 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Ensure all valid days in a non-leap-year can be created successfully. */
-    #[DataProvider("dataForTestCreate4")]
-    public function testCreate4(Month $month, int $day): void
-    {
-        $actual = DateTime::create(2025, $month, $day);
-        self::assertSame(2025, $actual->year());
-        self::assertSame($month, $actual->month());
-        self::assertSame($day, $actual->day());
-    }
-
-    public static function dataForTestCreate5(): iterable
-    {
-        foreach (Month::cases() as $month) {
-            for ($day = 1; $day <= $month->dayCount(2000); $day++) {
-                yield "{$day}-{$month->name}" => [$month, $day];
-            }
-        }
-    }
-
-    /** Ensure all valid days in a leap-year can be created successfully. */
-    #[DataProvider("dataForTestCreate5")]
-    public function testCreate5(Month $month, int $day): void
-    {
-        $actual = DateTime::create(2000, $month, $day);
-        self::assertSame(2000, $actual->year());
-        self::assertSame($month, $actual->month());
-        self::assertSame($day, $actual->day());
-    }
-
-    public static function dataForTestCreate6(): iterable
+    /** Gregorian hour and minute components for all valid times of day. */
+    public static function allValidGregorianHoursAndMinutes(): iterable
     {
         foreach (self::validHours() as $hour) {
             foreach (self::validMinutes() as $minute) {
@@ -508,164 +500,80 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Ensure all valid times of day can be created successfully. */
-    #[DataProvider("dataForTestCreate6")]
-    public function testCreate6(int $hour, int $minute): void
-    {
-        $actual = DateTime::create(2025, Month::January, 1, $hour, $minute);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame($hour, $actual->hour());
-        self::assertSame($minute, $actual->minute());
-    }
-
-    /** Ensure all valid seconds can be created successfully. */
-    #[DataProvider("validSeconds")]
-    public function testCreate7(int $second): void
-    {
-        $actual = DateTime::create(2025, Month::January, 1, 0, 0, $second);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame(0, $actual->hour());
-        self::assertSame(0, $actual->minute());
-        self::assertSame($second, $actual->second());
-
-        $actual = DateTime::create(2025, Month::January, 1, 23, 59, $second);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame(23, $actual->hour());
-        self::assertSame(59, $actual->minute());
-        self::assertSame($second, $actual->second());
-    }
-
-    /** Ensure all valid milliseconds can be created successfully. */
-    #[DataProvider("validMilliseconds")]
-    public function testCreate8(int $millisecond): void
-    {
-        $actual = DateTime::create(2025, Month::January, 1, 0, 0, 0, $millisecond);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame(0, $actual->hour());
-        self::assertSame(0, $actual->minute());
-        self::assertSame(0, $actual->second());
-        self::assertSame($millisecond, $actual->millisecond());
-
-        $actual = DateTime::create(2025, Month::January, 1, 23, 59, 59, $millisecond);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame(23, $actual->hour());
-        self::assertSame(59, $actual->minute());
-        self::assertSame(59, $actual->second());
-        self::assertSame($millisecond, $actual->millisecond());
-    }
-
-    /** Ensure the default time is midnight. */
-    public function testCreate9(): void
-    {
-        $actual = DateTime::create(2025, Month::January, 1);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame(0, $actual->hour());
-        self::assertSame(0, $actual->minute());
-        self::assertSame(0, $actual->second());
-        self::assertSame(0, $actual->millisecond());
-    }
-
-    /** Ensure the default millisecond is 0 when a time with seconds is given. */
-    public function testCreate10(): void
-    {
-        $actual = DateTime::create(2025, Month::January, 1, 12, 8, 41);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame(12, $actual->hour());
-        self::assertSame(8, $actual->minute());
-        self::assertSame(41, $actual->second());
-        self::assertSame(0, $actual->millisecond());
-    }
-
-    /** Ensure the default second and millisecond are both 0 when a time with just hours and minutes is given. */
-    public function testCreate11(): void
-    {
-        $actual = DateTime::create(2025, Month::January, 1, 10, 29);
-        self::assertSame(2025, $actual->year());
-        self::assertSame(Month::January, $actual->month());
-        self::assertSame(1, $actual->day());
-        self::assertSame(10, $actual->hour());
-        self::assertSame(29, $actual->minute());
-        self::assertSame(0, $actual->second());
-        self::assertSame(0, $actual->millisecond());
-    }
-
-    /** Ensure invalid years throw. */
-    #[DataProvider("invalidYears")]
-    public function testCreate12(int $year): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Expected year between -9999 and 9999 inclusive, found {$year}");
-        DateTime::create($year, Month::April, 23);
-    }
-
-    public static function dataForTestCreate13(): iterable
+    /** Gregorian date components for all valid days in a leap year.*/
+    public static function validGregorianComponentsLeapYear(): iterable
     {
         foreach (Month::cases() as $month) {
-            yield "{$month->name}-negative" => [$month, -1];
-            yield "{$month->name}-zero" => [$month, -1];
-            yield "{$month->name}-too-high" => [$month, $month->dayCount() + 1];
+            for ($day = 1; $day <= $month->dayCount(2000); $day++) {
+                yield "{$day}-{$month->name}" => [$month, $day];
+            }
         }
     }
 
-    /** Ensure invalid days throw. */
-    #[DataProvider("dataForTestCreate13")]
-    public function testCreate13(Month $month, int $day): void
+    /** Unix timestamps and their equivalent (UTC) Gregorian date-times. */
+    public static function unixTimestamps(): iterable
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Expected day between 1 and {$month->dayCount(2025)} inclusive, found {$day}");
-        DateTime::create(2025, $month, $day);
+        yield "unix-epoch" => [0, 1970, Month::January, 1, 0, 0, 0];
+        yield "unix-one-second-before-epoch" => [-1, 1969, Month::December, 31, 23, 59, 59];
+        yield "unix-one-second" => [1, 1970, Month::January, 1, 0, 0, 1];
+        yield "unix-leap-year" => [951826154, 2000, Month::February, 29, 12, 9, 14];
     }
 
-    /** Ensure invalid hours throw. */
-    #[DataProvider("invalidHours")]
-    public function testCreate14(int $hour): void
+    /** Unix timestamps and their millisecond equivalents. */
+    public static function unixTimestampsAndMillisecondTimestamps(): iterable
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Expected hour between 0 and 23 inclusive, found {$hour}");
-        DateTime::create(2025, Month::January, 1, $hour, 17, 44);
+        foreach (self::unixTimestamps() as $key => $arguments) {
+            yield str_replace("unix-", "unix-ms-", $key) => [$arguments[0], $arguments[0] * 1000];
+        }
     }
 
-    /** Ensure invalid minutes throw. */
-    #[DataProvider("invalidMinutes")]
-    public function testCreate15(int $minute): void
+    /** Unix millisecond timestamps and their second equivalents. */
+    public static function unixMillisecondTimestampsAndTimestamps(): iterable
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Expected minute between 0 and 59 inclusive, found {$minute}");
-        DateTime::create(2025, Month::January, 1, 12, $minute, 13);
+        yield "unix-ms-epoch" => [0, 0];
+        yield "unix-ms-one-second-before-epoch" => [-1000, -1];
+        yield "unix-ms-one-millisecond-before-epoch" => [-1, -1];
+        yield "unix-ms-one-second" => [1000, 1];
+        yield "unix-ms-one-millisecond" => [1, 0];
+        yield "unix-ms-pre-epoch-milliseconds" => [-1001, -2];
+        yield "unix-ms-post-epoch-milliseconds" => [951826154123, 951826154];
     }
 
-    /** Ensure invalid seconds throw. */
-    #[DataProvider("invalidSeconds")]
-    public function testCreate16(int $second): void
+    /** Unix millisecond timestamps. */
+    public static function unixMillisecondTimestamps(): iterable
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Expected second between 0 and 59 inclusive, found {$second}");
-        DateTime::create(2025, Month::January, 1, 12, 22, $second);
+        yield "unix-ms-epoch" => [0];
+        yield "unix-ms-one-second-before-epoch" => [-1000];
+        yield "unix-ms-one-millisecond-before-epoch" => [-1];
+        yield "unix-ms-one-second" => [1000];
+        yield "unix-ms-one-millisecond" => [1];
+        yield "unix-ms-pre-epoch-milliseconds" => [-1001];
+        yield "unix-ms-post-epoch-milliseconds" => [951826154123];
     }
 
-    /** Ensure invalid milliseconds throw. */
-    #[DataProvider("invalidMilliseconds")]
-    public function testCreate17(int $millisecond): void
+    /** A selection of dates and the weekdays for them. */
+    public static function datesAndWeekdays(): iterable
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");
-        DateTime::create(2025, Month::January, 1, 12, 22, 50, $millisecond);
+        // a week's worth of days and their weekdays, post-epoch
+        yield "monday-2025-02-24" => [2025, Month::February, 24, Weekday::Monday];
+        yield "tuesday-2025-02-25" => [2025, Month::February, 25, Weekday::Tuesday];
+        yield "wednesday-2025-02-26" => [2025, Month::February, 26, Weekday::Wednesday];
+        yield "thursday-2025-02-27" => [2025, Month::February, 27, Weekday::Thursday];
+        yield "friday-2025-02-28" => [2025, Month::February, 28, Weekday::Friday];
+        yield "saturday-2025-03-01" => [2025, Month::March, 1, Weekday::Saturday];
+        yield "sunday-2025-03-02" => [2025, Month::March, 2, Weekday::Sunday];
+
+        // a week's worth of days and their weekdays, pre-epoch
+        yield "monday-1953-09-07" => [1953, Month::September, 7, Weekday::Monday];
+        yield "tuesday-1953-09-08" => [1953, Month::September, 8, Weekday::Tuesday];
+        yield "wednesday-1953-09-09" => [1953, Month::September, 9, Weekday::Wednesday];
+        yield "thursday-1953-09-10" => [1953, Month::September, 10, Weekday::Thursday];
+        yield "friday-1953-09-11" => [1953, Month::September, 11, Weekday::Friday];
+        yield "saturday-1953-09-12" => [1953, Month::September, 12, Weekday::Saturday];
+        yield "sunday-1953-09-13" => [1953, Month::September, 13, Weekday::Sunday];
     }
 
+    /** A large selection of PHP built-in DateTime objects. */
     public static function phpDateTimes(): iterable
     {
         foreach (["UTC"/*, "Africa/Kigali"*/] as $timezoneName) {
@@ -775,115 +683,470 @@ class DateTimeTest extends TestCase
         }
     }
 
-
+    /** A large selection of PHP built-in DateTimeImmutable objects. */
     public static function phpDateTimeImmutables(): iterable
     {
         $timezoneName = "UTC";
 //        foreach (["America/New_York", "Europe/London"] as $timezoneName) {
-            $timezone = new PhpDateTimeZone($timezoneName);
+        $timezone = new PhpDateTimeZone($timezoneName);
 
-            // Every day of a non-leap year and of a leap year
-            foreach ([2025, 2000] as $year) {
-                foreach (Month::cases() as $month) {
-                    for ($day = 1; $day <= $month->dayCount($year); ++$day) {
-                        yield "every-day-{$timezoneName}-{$year}-{$month->name}-{$day} 00:00:00.000" => [
-                            PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("%04d-%02d-%02d 00:00:00.000", $year, $month->value, $day), $timezone),
-                            $year,
-                            $month,
-                            $day,
-                            0,
-                            0,
-                            0,
-                            0,
-                            $timezoneName,
-                        ];
-
-                        yield "every-day-{$timezoneName}-{$year}-{$month->name}-{$day} 23:59:59.999" => [
-                            PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("%04d-%02d-%02d 23:59:59.999", $year, $month->value, $day), $timezone),
-                            $year,
-                            $month,
-                            $day,
-                            23,
-                            59,
-                            59,
-                            999,
-                            $timezoneName,
-                        ];
-                    }
-                }
-            }
-
-            // Every time of day
-            for ($hour = 0; $hour <= 23; $hour++) {
-                for ($minute = 0; $minute <= 59; $minute++) {
-                    yield "every-time-{$timezoneName}-2025-04-23-{$hour}:{$minute}:00.000" => [
-                        PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("2025-04-23 %02d:%02d:00.000", $hour, $minute), $timezone),
-                        2025,
-                        Month::April,
-                        23,
-                        $hour,
-                        $minute,
+        // Every day of a non-leap year and of a leap year
+        foreach ([2025, 2000] as $year) {
+            foreach (Month::cases() as $month) {
+                for ($day = 1; $day <= $month->dayCount($year); ++$day) {
+                    yield "every-day-{$timezoneName}-{$year}-{$month->name}-{$day} 00:00:00.000" => [
+                        PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("%04d-%02d-%02d 00:00:00.000", $year, $month->value, $day), $timezone),
+                        $year,
+                        $month,
+                        $day,
+                        0,
+                        0,
                         0,
                         0,
                         $timezoneName,
                     ];
 
-                    yield "every-time-{$timezoneName}-2025-04-23-{$hour}:{$minute}:59.999" => [
-                        PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("2025-04-23 %02d:%02d:59.999", $hour, $minute), $timezone),
-                        2025,
-                        Month::April,
+                    yield "every-day-{$timezoneName}-{$year}-{$month->name}-{$day} 23:59:59.999" => [
+                        PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("%04d-%02d-%02d 23:59:59.999", $year, $month->value, $day), $timezone),
+                        $year,
+                        $month,
+                        $day,
                         23,
-                        $hour,
-                        $minute,
+                        59,
                         59,
                         999,
                         $timezoneName,
                     ];
                 }
             }
+        }
 
-            // Every second of a minute
-            for ($second = 0; $second <= 59; $second++) {
-                yield "every-second-{$timezoneName}-2020-02-29-14:01:{$second}.000" => [
-                    PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("2020-02-29 14:01:%02d.000", $second), $timezone),
-                    2020,
-                    Month::February,
-                    29,
-                    14,
-                    1,
-                    $second,
+        // Every time of day
+        for ($hour = 0; $hour <= 23; $hour++) {
+            for ($minute = 0; $minute <= 59; $minute++) {
+                yield "every-time-{$timezoneName}-2025-04-23-{$hour}:{$minute}:00.000" => [
+                    PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("2025-04-23 %02d:%02d:00.000", $hour, $minute), $timezone),
+                    2025,
+                    Month::April,
+                    23,
+                    $hour,
+                    $minute,
+                    0,
                     0,
                     $timezoneName,
                 ];
 
-                yield "every-second-{$timezoneName}-1981-11-30-22:40:{$second}.999" => [
-                    PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("1981-11-30 22:40:%02d.999", $second), $timezone),
-                    1981,
-                    Month::November,
-                    30,
-                    22,
-                    40,
-                    $second,
+                yield "every-time-{$timezoneName}-2025-04-23-{$hour}:{$minute}:59.999" => [
+                    PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("2025-04-23 %02d:%02d:59.999", $hour, $minute), $timezone),
+                    2025,
+                    Month::April,
+                    23,
+                    $hour,
+                    $minute,
+                    59,
                     999,
                     $timezoneName,
                 ];
             }
+        }
 
-            // Every millisecond of a second
-            for ($millisecond = 0; $millisecond <= 999; $millisecond++) {
-                yield "every-millisecond-{$timezoneName}-1965-12-01-01:21:18.{$millisecond}" => [
-                    PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("1965-12-01 01:21:18.%03d", $millisecond), $timezone),
-                    1965,
-                    Month::December,
-                    1,
-                    1,
-                    21,
-                    18,
-                    $millisecond,
-                    $timezoneName,
+        // Every second of a minute
+        for ($second = 0; $second <= 59; $second++) {
+            yield "every-second-{$timezoneName}-2020-02-29-14:01:{$second}.000" => [
+                PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("2020-02-29 14:01:%02d.000", $second), $timezone),
+                2020,
+                Month::February,
+                29,
+                14,
+                1,
+                $second,
+                0,
+                $timezoneName,
+            ];
+
+            yield "every-second-{$timezoneName}-1981-11-30-22:40:{$second}.999" => [
+                PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("1981-11-30 22:40:%02d.999", $second), $timezone),
+                1981,
+                Month::November,
+                30,
+                22,
+                40,
+                $second,
+                999,
+                $timezoneName,
+            ];
+        }
+
+        // Every millisecond of a second
+        for ($millisecond = 0; $millisecond <= 999; $millisecond++) {
+            yield "every-millisecond-{$timezoneName}-1965-12-01-01:21:18.{$millisecond}" => [
+                PhpDateTimeImmutable::createFromFormat("Y-m-d H:i:s.v", sprintf("1965-12-01 01:21:18.%03d", $millisecond), $timezone),
+                1965,
+                Month::December,
+                1,
+                1,
+                21,
+                18,
+                $millisecond,
+                $timezoneName,
+            ];
+        }
+//        }
+    }
+
+    /** Some dates paired with all dates in the same year. */
+    public static function datesWithAllDatesInSameYear(): iterable
+    {
+        // 2025-04-01T12:00:00.000Z
+        $testDate = 1743508800;
+
+        // 2025-01-01T12:00:00.000Z
+        $sameYear = 1735732800;
+
+        for ($day = 1; $day <= 365; ++$day) {
+            yield sprintf("after-epoch-2025-04-01-and-2025-day-%03d", $day) => [$testDate, $sameYear];
+            $sameYear += GregorianRatios::SecondsPerHour * GregorianRatios::HoursPerDay;
+        }
+
+        // 1963-07-23T14:01:18.000Z
+        $testDate = -203335122;
+
+        // 1963-01-01T12:00:00.000Z
+        $sameYear = -220874322;
+
+        for ($day = 1; $day <= 365; ++$day) {
+            yield sprintf("before-epoch-1963-07-23-and-1963-day-%03d", $day) => [$testDate, $sameYear];
+            $sameYear += GregorianRatios::SecondsPerHour * GregorianRatios::HoursPerDay;
+        }
+
+        // 1984-02-29T01:18:42.000Z
+        $testDate = 446865522;
+
+        // 1984-01-01T12:00:00.000Z
+        $sameYear = 441767922;
+
+        for ($day = 1; $day <= 366; ++$day) {
+            yield sprintf("leap-year-1984-07-23-and-1984-day-%03d", $day) => [$testDate, $sameYear];
+            $sameYear += GregorianRatios::SecondsPerHour * GregorianRatios::HoursPerDay;
+        }
+    }
+
+    /** Some dates paired with all dates in the same month. */
+    public static function datesWithAllDatesInSameMonth(): iterable
+    {
+        // first, last and mid-month day for all months in a post-epoch year, a leap-year and a pre-epoch year
+        foreach ([2021, 2012, 1959] as $year) {
+            foreach (Month::cases() as $month) {
+                foreach ([1, 15, 31] as $day) {
+                    $day = min($day, $month->dayCount($year));
+
+                    // pair with every day in the same month (including itself)
+                    for ($otherDay = 1; $otherDay < $month->dayCount($year); $otherDay++) {
+                        yield sprintf("same-month-%02d-%02d-%02d-and-%02d", $year, $month->value, $day, $otherDay) => [
+                            DateTime::create($year, $month, $day, 13, 12, 48, 105),
+                            DateTime::create($year, $month, $otherDay, 7, 55, 15, 337),
+                        ];
+                    }
+                }
+            }
+        }
+    }
+
+    /** Dates paired with other dates that are in the first ms of the next year. */
+    public static function datesAndFirstMsOfNextYear(): iterable
+    {
+        yield "after-epoch-1ms-next-year" => [
+            DateTime::create(2002, Month::May, 27, 21, 8, 30, 449),
+            DateTime::create(2003, Month::January, 1, 0, 0, 59, 0),
+        ];
+
+        yield "before-epoch-1ms-next-year" => [
+            DateTime::create(1955, Month::October, 15, 13, 0, 51, 280),
+            DateTime::create(1956, Month::January, 1, 0, 0, 59, 0),
+        ];
+
+        yield "leap-year-1ms-next-year" => [
+            DateTime::create(1992, Month::November, 19, 15, 42, 38, 033),
+            DateTime::create(1993, Month::January, 1, 0, 0, 59, 0),
+        ];
+    }
+
+    /** Dates paired with other dates that are in the last ms of the previous year. */
+    public static function datesAndLastMsOfPreviousYear(): iterable
+    {
+        yield "after-epoch-1ms-previous-year" => [
+            DateTime::create(2010, Month::December, 3, 19, 31, 32, 181),
+            DateTime::create(2009, Month::December, 31, 23, 59, 59, 999),
+        ];
+
+        yield "before-epoch-1ms-previous-year" => [
+            DateTime::create(1943, Month::August, 28, 17, 44, 1, 763),
+            DateTime::create(1942, Month::December, 31, 23, 59, 59, 999),
+        ];
+
+        yield "leap-year-1ms-previous-year" => [
+            DateTime::create(1974, Month::September, 24, 11, 44, 21, 915),
+            DateTime::create(1973, Month::December, 31, 23, 59, 59, 999),
+        ];
+    }
+
+    /** Dates paired with the same date in another year. */
+    public static function datesInTwoDifferentYears(): iterable
+    {
+        for ($year = 1900; $year < 2040; ++$year) {
+            // after epoch
+            if (1984 !== $year) {
+                yield sprintf("1984-03-18-14:03:41.941-and-%04d", $year) => [
+                    DateTime::create(1984, Month::March, 18, 14, 3, 41, 941),
+                    DateTime::create($year, Month::March, 18, 14, 3, 41, 941),
                 ];
             }
-//        }
+
+            // before epoch
+            if (1958 !== $year) {
+                yield sprintf("1958-04-21-09:12:19.300-and-%04d", $year) => [
+                    DateTime::create(1958, Month::April, 21, 9, 12, 19, 300),
+                    DateTime::create($year, Month::April, 21, 9, 12, 19, 300),
+                ];
+            }
+        }
+    }
+
+    /** Microtimes for testing DateTime::now(), and the expected DateTimes. */
+    public static function microtimesAndDates(): iterable
+    {
+        yield "epoch" => [0.0, DateTime::create(1970, Month::January, 1, 0, 0, 0, 0)];
+
+        // ensure microseconds are always rounded down to milliseconds
+        yield "1-microseconds" => [1741474654.999001, DateTime::create(2025, Month::March, 8, 22, 57, 34, 999)];
+        yield "499-microseconds" => [1567964614.500499, DateTime::create(2019, Month::September, 8, 17, 43, 34, 500)];
+        yield "501-microseconds" => [190873957.000501, DateTime::create(1976, Month::January, 19, 4, 32, 37, 0)];
+        yield "999-microseconds" => [373893251.158999, DateTime::create(1981, Month::November, 6, 11, 14, 11, 158)];
+    }
+
+    /**
+     * Ensure we can create accurate DateTime instances from date-time components.
+     *
+     * NOTE the timestamp from the data provider is intentionally ignored.
+     */
+    #[DataProvider("gregorianComponentsWithMillisecondTimestamps")]
+    public function testCreate1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, TimeZone $timeZone): void
+    {
+        $actual = DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone);
+        self::assertSame($year, $actual->year());
+        self::assertSame($month, $actual->month());
+        self::assertSame($day, $actual->day());
+        self::assertSame($hour, $actual->hour());
+        self::assertSame($minute, $actual->minute());
+        self::assertSame($second, $actual->second());
+        self::assertSame($millisecond, $actual->millisecond());
+        self::assertSame($timeZone->name(), $actual->timeZone()->name());
+    }
+
+    /** Ensure we can create dates in leap years. */
+    #[DataProvider("leapYears")]
+    public function testCreate2(int $year): void
+    {
+        $actual = DateTime::create($year, Month::February, 1);
+        self::assertSame($year, $actual->year());
+        self::assertSame(Month::February, $actual->month());
+        self::assertSame(1, $actual->day());
+        $actual = DateTime::create($year, Month::February, 29);
+        self::assertSame($year, $actual->year());
+        self::assertSame(Month::February, $actual->month());
+        self::assertSame(29, $actual->day());
+        $actual = DateTime::create($year, Month::March, 1);
+        self::assertSame($year, $actual->year());
+        self::assertSame(Month::March, $actual->month());
+        self::assertSame(1, $actual->day());
+    }
+
+    /** Ensure non-leap years don't accept 29th Feb. */
+    #[DataProvider("nonLeapYears")]
+    public function testCreate3(int $year): void
+    {
+        $actual = DateTime::create($year, Month::February, 1);
+        self::assertSame($year, $actual->year());
+        self::assertSame(Month::February, $actual->month());
+        self::assertSame(1, $actual->day());
+
+        $actual = DateTime::create($year, Month::February, 28);
+        self::assertSame($year, $actual->year());
+        self::assertSame(Month::February, $actual->month());
+        self::assertSame(28, $actual->day());
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected day between 1 and 28 inclusive, found 29");
+        DateTime::create($year, Month::February, 29);
+    }
+
+    /** Ensure all valid days in a non-leap-year can be created successfully. */
+    #[DataProvider("validGregorianComponentsNonLeapYear")]
+    public function testCreate4(Month $month, int $day): void
+    {
+        $actual = DateTime::create(2025, $month, $day);
+        self::assertSame(2025, $actual->year());
+        self::assertSame($month, $actual->month());
+        self::assertSame($day, $actual->day());
+    }
+
+    /** Ensure all valid days in a leap-year can be created successfully. */
+    #[DataProvider("validGregorianComponentsLeapYear")]
+    public function testCreate5(Month $month, int $day): void
+    {
+        $actual = DateTime::create(2000, $month, $day);
+        self::assertSame(2000, $actual->year());
+        self::assertSame($month, $actual->month());
+        self::assertSame($day, $actual->day());
+    }
+
+    /** Ensure all valid times of day can be created successfully. */
+    #[DataProvider("allValidGregorianHoursAndMinutes")]
+    public function testCreate6(int $hour, int $minute): void
+    {
+        $actual = DateTime::create(2025, Month::January, 1, $hour, $minute);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame($hour, $actual->hour());
+        self::assertSame($minute, $actual->minute());
+    }
+
+    /** Ensure all valid seconds can be created successfully. */
+    #[DataProvider("validSeconds")]
+    public function testCreate7(int $second): void
+    {
+        $actual = DateTime::create(2025, Month::January, 1, 0, 0, $second);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame(0, $actual->hour());
+        self::assertSame(0, $actual->minute());
+        self::assertSame($second, $actual->second());
+
+        $actual = DateTime::create(2025, Month::January, 1, 23, 59, $second);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame(23, $actual->hour());
+        self::assertSame(59, $actual->minute());
+        self::assertSame($second, $actual->second());
+    }
+
+    /** Ensure all valid milliseconds can be created successfully. */
+    #[DataProvider("validMilliseconds")]
+    public function testCreate8(int $millisecond): void
+    {
+        $actual = DateTime::create(2025, Month::January, 1, 0, 0, 0, $millisecond);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame(0, $actual->hour());
+        self::assertSame(0, $actual->minute());
+        self::assertSame(0, $actual->second());
+        self::assertSame($millisecond, $actual->millisecond());
+
+        $actual = DateTime::create(2025, Month::January, 1, 23, 59, 59, $millisecond);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame(23, $actual->hour());
+        self::assertSame(59, $actual->minute());
+        self::assertSame(59, $actual->second());
+        self::assertSame($millisecond, $actual->millisecond());
+    }
+
+    /** Ensure the default time is midnight. */
+    public function testCreate9(): void
+    {
+        $actual = DateTime::create(2025, Month::January, 1);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame(0, $actual->hour());
+        self::assertSame(0, $actual->minute());
+        self::assertSame(0, $actual->second());
+        self::assertSame(0, $actual->millisecond());
+    }
+
+    /** Ensure the default millisecond is 0 when a time with seconds is given. */
+    public function testCreate10(): void
+    {
+        $actual = DateTime::create(2025, Month::January, 1, 12, 8, 41);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame(12, $actual->hour());
+        self::assertSame(8, $actual->minute());
+        self::assertSame(41, $actual->second());
+        self::assertSame(0, $actual->millisecond());
+    }
+
+    /** Ensure the default second and millisecond are both 0 when a time with just hours and minutes is given. */
+    public function testCreate11(): void
+    {
+        $actual = DateTime::create(2025, Month::January, 1, 10, 29);
+        self::assertSame(2025, $actual->year());
+        self::assertSame(Month::January, $actual->month());
+        self::assertSame(1, $actual->day());
+        self::assertSame(10, $actual->hour());
+        self::assertSame(29, $actual->minute());
+        self::assertSame(0, $actual->second());
+        self::assertSame(0, $actual->millisecond());
+    }
+
+    /** Ensure invalid years throw. */
+    #[DataProvider("invalidYears")]
+    public function testCreate12(int $year): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected year between -9999 and 9999 inclusive, found {$year}");
+        DateTime::create($year, Month::April, 23);
+    }
+
+    /** Ensure attempting to create with invalid days throws. */
+    #[DataProvider("gregorianComponentsInvalidDays")]
+    public function testCreate13(int $year, Month $month, int $day): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected day between 1 and {$month->dayCount($year)} inclusive, found {$day}");
+        DateTime::create($year, $month, $day);
+    }
+
+    /** Ensure invalid hours throw. */
+    #[DataProvider("invalidHours")]
+    public function testCreate14(int $hour): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected hour between 0 and 23 inclusive, found {$hour}");
+        DateTime::create(2025, Month::January, 1, $hour, 17, 44);
+    }
+
+    /** Ensure invalid minutes throw. */
+    #[DataProvider("invalidMinutes")]
+    public function testCreate15(int $minute): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected minute between 0 and 59 inclusive, found {$minute}");
+        DateTime::create(2025, Month::January, 1, 12, $minute, 13);
+    }
+
+    /** Ensure invalid seconds throw. */
+    #[DataProvider("invalidSeconds")]
+    public function testCreate16(int $second): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected second between 0 and 59 inclusive, found {$second}");
+        DateTime::create(2025, Month::January, 1, 12, 22, $second);
+    }
+
+    /** Ensure invalid milliseconds throw. */
+    #[DataProvider("invalidMilliseconds")]
+    public function testCreate17(int $millisecond): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");
+        DateTime::create(2025, Month::January, 1, 12, 22, 50, $millisecond);
     }
 
     /** Ensure PHP DateTime objects can be correctly converted. */
@@ -948,13 +1211,6 @@ class DateTimeTest extends TestCase
         $dateTime = DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond);
         self::assertSame($expectedUnix, $dateTime->unixTimestamp());
         self::assertSame($expectedUnixMs, $dateTime->unixTimestampMs());
-    }
-
-    public static function unixTimestamps(): iterable
-    {
-        yield "unix-epoch" => [0, 1970, Month::January, 1, 0, 0, 0];
-        yield "unix-one-second" => [1, 1970, Month::January, 1, 0, 0, 1];
-        yield "unix-leap-year" => [951826154, 2000, Month::February, 29, 12, 9, 14];
     }
 
     /** Ensure we can correctly instantiate from unix timestamps. */
@@ -1243,50 +1499,773 @@ class DateTimeTest extends TestCase
     }
 
     /** Ensure syncUnix() correctly synchronises the Unix timestamp. */
-    #[DataProvider("gregorianComponentsWithTimestamps")]
-    public function testSyncUnix(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, \Meridiem\Contracts\TimeZone $timeZone, int $expectedTimestampMs): void
+    #[DataProvider("gregorianComponentsWithMillisecondTimestamps")]
+    public function testSyncUnix1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, \Meridiem\Contracts\TimeZone $timeZone, int $expectedTimestampMs): void
     {
         $dateTime = new XRay(DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone));
         self::assertFalse($dateTime->isUnixClean());
         $dateTime->syncUnix();
-        self::assertSame($expectedTimestampMs, $dateTime->unixMs, "Expected {$expectedTimestampMs}, found {$dateTime->unixMs}");
+         self::assertSame($expectedTimestampMs, $dateTime->unixMs, "Expected {$expectedTimestampMs}, found {$dateTime->unixMs}");
+    }
+
+    /** Ensure the day, month and year are set. */
+    public function testWithDate1(): void
+    {
+        $dateTime = DateTime::create(2025, Month::February, 27);
+        // test is only valid if the date-time is initialised correctly
+        self::assertSame(2025, $dateTime->year());
+        self::assertSame(Month::February, $dateTime->month());
+        self::assertSame(27, $dateTime->day());
+        $dateTime = $dateTime->withDate(2011, Month::July, 5);
+        self::assertSame(2011, $dateTime->year());
+        self::assertSame(Month::July, $dateTime->month());
+        self::assertSame(5, $dateTime->day());
+    }
+
+    /** Ensure setting the date to invalid years throws. */
+    #[DataProvider("invalidYears")]
+    public function testWithDate2(int $year): void
+    {
+        if (!self::phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected year between -9999 and 9999 inclusive, found {$year}");
+
+        DateTime::create(2025, Month::February, 27)
+            ->withDate($year, Month::January, 1);
+    }
+
+    /** Ensure setting the date to invalid days throws. */
+    #[DataProvider("gregorianComponentsInvalidDays")]
+    public function testWithDate3(int $year, Month $month, int $day): void
+    {
+        if (!self::phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches("/^Expected day between 1 and (?:2[89]|3[01]) inclusive, found {$day}\$/");
+
+        DateTime::create(2025, Month::February, 27)
+            ->withDate($year, $month, $day);
+    }
+
+    /** Ensure setting the date preserves immutability. */
+    public function testWithDate4(): void
+    {
+        $dateTime = DateTime::create(2021, Month::May, 13);
+        $actual = $dateTime->withDate(2024, Month::February, 27);
+        self::assertNotSame($dateTime, $actual);
+        self::assertSame(2021, $dateTime->year());
+        self::assertSame(Month::May, $dateTime->month());
+        self::assertSame(13, $dateTime->day());
+    }
+
+    /** Ensure the hour, minute, second and millisecond are set. */
+    public function testWithTime1(): void
+    {
+        $dateTime = DateTime::create(2025, Month::February, 27, 10, 4, 21, 831);
+        // test is only valid if the date-time is initialised correctly
+        self::assertSame(2025, $dateTime->year());
+        self::assertSame(Month::February, $dateTime->month());
+        self::assertSame(27, $dateTime->day());
+        self::assertSame(10, $dateTime->hour());
+        self::assertSame(4, $dateTime->minute());
+        self::assertSame(21, $dateTime->second());
+        self::assertSame(831, $dateTime->millisecond());
+        $dateTime = $dateTime->withTime(14, 29,33,110);
+        self::assertSame(14, $dateTime->hour());
+        self::assertSame(29, $dateTime->minute());
+        self::assertSame(33, $dateTime->second());
+        self::assertSame(110, $dateTime->millisecond());
+    }
+
+    /** Ensure the millisecond is set to 0 when the time is set without it. */
+    public function testWithTime2(): void
+    {
+        $dateTime = DateTime::create(2025, Month::February, 27, 10, 4, 21, 831);
+        // test is only valid if the date-time is initialised correctly
+        self::assertSame(2025, $dateTime->year());
+        self::assertSame(Month::February, $dateTime->month());
+        self::assertSame(27, $dateTime->day());
+        self::assertSame(10, $dateTime->hour());
+        self::assertSame(4, $dateTime->minute());
+        self::assertSame(21, $dateTime->second());
+        self::assertSame(831, $dateTime->millisecond());
+        $dateTime = $dateTime->withTime(14, 29,33);
+        self::assertSame(14, $dateTime->hour());
+        self::assertSame(29, $dateTime->minute());
+        self::assertSame(33, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+    }
+
+    /** Ensure the second and millisecond are both set to 0 when the time is set without them. */
+    public function testWithTime3(): void
+    {
+        $dateTime = DateTime::create(2025, Month::February, 27, 10, 4, 21, 831);
+        // test is only valid if the date-time is initialised correctly
+        self::assertSame(2025, $dateTime->year());
+        self::assertSame(Month::February, $dateTime->month());
+        self::assertSame(27, $dateTime->day());
+        self::assertSame(10, $dateTime->hour());
+        self::assertSame(4, $dateTime->minute());
+        self::assertSame(21, $dateTime->second());
+        self::assertSame(831, $dateTime->millisecond());
+        $dateTime = $dateTime->withTime(14, 29);
+        self::assertSame(14, $dateTime->hour());
+        self::assertSame(29, $dateTime->minute());
+        self::assertSame(0, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+    }
+
+    /** Ensure setting the time to an invalid hour throws. */
+    #[DataProvider("invalidHours")]
+    public function testWithTime4(int $hour): void
+    {
+        if (!self::phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected hour between 0 and 23 inclusive, found {$hour}");
+
+        DateTime::create(2025, Month::February, 27, 10, 4, 21, 831)
+            ->withTime($hour, 10, 15, 20);
+    }
+
+    /** Ensure setting the time to an invalid minute throws. */
+    #[DataProvider("invalidMinutes")]
+    public function testWithTime5(int $minute): void
+    {
+        if (!self::phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected minute between 0 and 59 inclusive, found {$minute}");
+
+        DateTime::create(2025, Month::February, 27, 10, 4, 21, 831)
+            ->withTime(10, $minute, 15, 20);
+    }
+
+    /** Ensure setting the time to an invalid second throws. */
+    #[DataProvider("invalidSeconds")]
+    public function testWithTime6(int $second): void
+    {
+        if (!self::phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected second between 0 and 59 inclusive, found {$second}");
+
+        DateTime::create(2025, Month::February, 27, 10, 4, 21, 831)
+            ->withTime(10, 15, $second, 20);
+    }
+
+    /** Ensure setting the time to an invalid millisecond throws. */
+    #[DataProvider("invalidMilliseconds")]
+    public function testWithTime7(int $millisecond): void
+    {
+        if (!self::phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");
+
+        DateTime::create(2025, Month::February, 27, 10, 4, 21, 831)
+            ->withTime(10, 15, 20, $millisecond);
+    }
+
+    /** Ensure setting the time preserves immutability. */
+    public function testWithTime8(): void
+    {
+        $dateTime = DateTime::create(2025, Month::February, 27, 10, 4, 21, 831);
+        $actual = $dateTime->withTime(3, 55, 28, 431);
+        self::assertNotSame($dateTime, $actual);
+        self::assertSame(10, $dateTime->hour());
+        self::assertSame(4, $dateTime->minute());
+        self::assertSame(21, $dateTime->second());
+        self::assertSame(831, $dateTime->millisecond());
+    }
+
+    /** Ensure we can read the timezone. */
+    public function testTimeZone1(): void
+    {
+        // 2025-03-04T20:04:37.000Z
+        $dateTime = DateTime::create(2025, Month::March, 4, 20, 4, 37, 0, TimeZone::parse("+0200"));
+        $actual = $dateTime->timeZone();
+
+        self::assertSame("+0200", $actual->name());
+        $offset = $actual->sdtOffset();
+        self::assertSame(2, $offset->hours());
+        self::assertSame(0, $offset->minutes());
+    }
+
+    /** Ensure the correct year is reported by year(). */
+    #[DataProvider("validYears")]
+    public function testYear1(int $year): void
+    {
+        $dateTime = DateTime::create($year, Month::January, 1);
+        self::assertSame($year, $dateTime->year());
+    }
+
+    /** Ensure the correct month is reported by month(). */
+    #[DataProvider("allMonths")]
+    public function testMonth1(Month $month): void
+    {
+        $dateTime = DateTime::create(2025, $month, 1);
+        self::assertSame($month, $dateTime->month());
+    }
+
+    /** Ensure the correct day is reported by day() for all days in a non-leap year. */
+    #[DataProvider("everyNonLeapYearDay")]
+    public function testDay1(int $year, Month $month, int $day): void
+    {
+        $dateTime = DateTime::create($year, $month, $day);
+        self::assertSame($day, $dateTime->day());
+    }
+
+    /** Ensure the correct day is reported by day() for all days in a leap year. */
+    #[DataProvider("everyLeapYearDay")]
+    public function testDay2(int $year, Month $month, int $day): void
+    {
+        $dateTime = DateTime::create($year, $month, $day);
+        self::assertSame($day, $dateTime->day());
+    }
+
+    /** Ensure the correct hour is reported by hour(). */
+    #[DataProvider("validHours")]
+    public function testHour1(int $hour): void
+    {
+        $dateTime = DateTime::create(2001, Month::June, 2, $hour, 15);
+        self::assertSame($hour, $dateTime->hour());
+    }
+
+    /** Ensure the correct minute is reported by minute(). */
+    #[DataProvider("validMinutes")]
+    public function testMinute1(int $minute): void
+    {
+        $dateTime = DateTime::create(2010, Month::August, 14, 12, $minute);
+        self::assertSame($minute, $dateTime->minute());
+    }
+
+    /** Ensure the correct second is reported by second(). */
+    #[DataProvider("validSeconds")]
+    public function testSecond1(int $second): void
+    {
+        $dateTime = DateTime::create(1999, Month::March, 3, 5, 43, $second);
+        self::assertSame($second, $dateTime->second());
+    }
+
+    /** Ensure the correct millisecond is reported by millisecond(). */
+    #[DataProvider("validMilliseconds")]
+    public function testMillisecond1(int $millisecond): void
+    {
+        $dateTime = DateTime::create(1993, Month::September, 23, 10, 18, 57, $millisecond);
+        self::assertSame($millisecond, $dateTime->millisecond());
+    }
+
+    /** Ensure the weekday of the Epoch day is correct all day. */
+    public function testWeekday1(): void
+    {
+        $dateTime = DateTime::fromUnixTimestamp(0);
+        self::assertSame(Weekday::Thursday, $dateTime->weekday());
+        $dateTime = DateTime::fromUnixTimestampMs(GregorianRatios::MillisecondsPerDay - 1);
+        self::assertSame(Weekday::Thursday, $dateTime->weekday());
+    }
+
+    /** Ensure the weekday of the day after the Epoch day is correct. */
+    public function testWeekday2(): void
+    {
+        $dateTime = DateTime::fromUnixTimestampMs(GregorianRatios::MillisecondsPerDay);
+        self::assertSame(Weekday::Friday, $dateTime->weekday());
+    }
+
+    /** Ensure 29th February in a leap year has the correct weekday all day. */
+    public function testWeekday3(): void
+    {
+        // 2000-02-29T00:00:00.000Z
+        $dateTime = DateTime::fromUnixTimestamp(951782400);
+        self::assertSame(Weekday::Tuesday, $dateTime->weekday());
+
+        // 2000-02-29T23:59:59.999Z
+        $dateTime = DateTime::fromUnixTimestampMs(951868799999);
+        self::assertSame(Weekday::Tuesday, $dateTime->weekday());
+    }
+
+    /** Ensure 1st March in a leap year has the correct weekday all day. */
+    public function testWeekday4(): void
+    {
+        // 2000-03-01T00:00:00.000Z
+        $dateTime = DateTime::fromUnixTimestamp(951868800);
+        self::assertSame(Weekday::Wednesday, $dateTime->weekday());
+    }
+
+    /** Ensure a selection of dates all have the correct weekday. */
+    #[DataProvider("datesAndWeekdays")]
+    public function testWeekday5(int $year, Month $month, int $day, Weekday $expectedWeekday): void
+    {
+        $dateTime = DateTime::create($year, $month, $day);
+        self::assertSame($expectedWeekday, $dateTime->weekday());
+        $dateTime = DateTime::create($year, $month, $day, 23, 59, 59, 999);
+        self::assertSame($expectedWeekday, $dateTime->weekday());
+    }
+
+    /** Ensure we get the expected timestamp when creating from a timestamp. */
+    #[DataProvider("unixTimestamps")]
+    public function testUnixTimestamp1(int $timestamp): void
+    {
+        self::assertSame($timestamp, DateTime::fromUnixTimestamp($timestamp)->unixTimestamp());
+    }
+
+    /** Ensure we get the expected timestamp when creating from a millisecond timestamp. */
+    #[DataProvider("unixMillisecondTimestampsAndTimestamps")]
+    public function testUnixTimestamp2(int $msTimestamp, int $expectedTimestamp): void
+    {
+        self::assertSame($expectedTimestamp, DateTime::fromUnixTimestampMs($msTimestamp)->unixTimestamp());
+    }
+
+    /** Ensure we get the expected timestamp from Gregorian components. */
+    #[DataProvider("gregorianComponentsWithTimestamps")]
+    public function testUnixTimestamp3(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, TimeZone $timeZone, int $expectedTimestamp): void
+    {
+        self::assertSame(
+            $expectedTimestamp,
+            DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone)
+                ->unixTimestamp(),
+        );
+    }
+
+    /** Ensure we get the expected millisecond timestamp when creating from a timestamp. */
+    #[DataProvider("unixMillisecondTimestamps")]
+    public function testUnixTimestampMs1(int $millisecondTimestamp): void
+    {
+        self::assertSame($millisecondTimestamp, DateTime::fromUnixTimestampMs($millisecondTimestamp)->unixTimestampMs());
+    }
+
+    /** Ensure we get the expected millisecond timestamp when creating from a timestamp. */
+    #[DataProvider("unixTimestampsAndMillisecondTimestamps")]
+    public function testUnixTimestampMs2(int $timestamp, int $expectedTimestampMs): void
+    {
+        self::assertSame($expectedTimestampMs, DateTime::fromUnixTimestamp($timestamp)->unixTimestampMs());
+    }
+
+    /** Ensure we get the expected millisecond timestamp from Gregorian components. */
+    #[DataProvider("gregorianComponentsWithMillisecondTimestamps")]
+    public function testUnixTimestampMs3(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, TimeZone $timeZone, int $expectedTimestampMs): void
+    {
+        self::assertSame(
+            $expectedTimestampMs,
+            DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone)
+                ->unixTimestampMs(),
+        );
+    }
+
+    /** Ensure withHour() sets the correct hour. */
+    #[DataProvider("validHours")]
+    public function testWithHour1(int $hour): void
+    {
+        // ensure it starts out with a different hour
+        $initialHour = ($hour + 6) % 24;
+        $dateTime = DateTime::create(2025, Month::October, 12, $initialHour, 22);
+        self::assertSame(2025, $dateTime->year());
+        self::assertSame(Month::October, $dateTime->month());
+        self::assertSame(12, $dateTime->day());
+        self::assertSame($initialHour, $dateTime->hour());
+        self::assertSame(22, $dateTime->minute());
+        self::assertSame(0, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+        $dateTime = $dateTime->withHour($hour);
+        self::assertSame(2025, $dateTime->year());
+        self::assertSame(Month::October, $dateTime->month());
+        self::assertSame(12, $dateTime->day());
+        self::assertSame($hour, $dateTime->hour());
+        self::assertSame(22, $dateTime->minute());
+        self::assertSame(0, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+    }
+
+    /** Ensure withHour() preserves immutability. */
+    public function testWithHour2(): void
+    {
+        $dateTime = DateTime::create(1942, Month::December, 24, 13, 1, 48, 992);
+        $actual = $dateTime->withHour(4);
+        self::assertNotSame($dateTime, $actual);
+        self::assertSame(1942, $dateTime->year());
+        self::assertSame(Month::December, $dateTime->month());
+        self::assertSame(24, $dateTime->day());
+        self::assertSame(13, $dateTime->hour());
+        self::assertSame(1, $dateTime->minute());
+        self::assertSame(48, $dateTime->second());
+        self::assertSame(992, $dateTime->millisecond());
+    }
+
+    /** Ensure withHour() throws when given an invalid minute. */
+    #[DataProvider("invalidHours")]
+    public function testWithHour3(int $hour): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected hour between 0 and 23 inclusive, found {$hour}");
+        DateTime::create(1986, Month::April, 26, 1, 23)
+            ->withHour($hour);
+    }
+
+    /** Ensure withMinute() sets the correct minute. */
+    #[DataProvider("validMinutes")]
+    public function testWithMinute1(int $minute): void
+    {
+        // ensure it starts out with a different minute
+        $initialMinute = ($minute + 30) % 60;
+        $dateTime = DateTime::create(2019, Month::July, 3, 4, $initialMinute);
+        self::assertSame(2019, $dateTime->year());
+        self::assertSame(Month::July, $dateTime->month());
+        self::assertSame(3, $dateTime->day());
+        self::assertSame(4, $dateTime->hour());
+        self::assertSame($initialMinute, $dateTime->minute());
+        self::assertSame(0, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+        $dateTime = $dateTime->withMinute($minute);
+        self::assertSame(2019, $dateTime->year());
+        self::assertSame(Month::July, $dateTime->month());
+        self::assertSame(3, $dateTime->day());
+        self::assertSame(4, $dateTime->hour());
+        self::assertSame($minute, $dateTime->minute());
+        self::assertSame(0, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+    }
+
+    /** Ensure withMinute() preserves immutability. */
+    public function testWithMinute2(): void
+    {
+        $dateTime = DateTime::create(1987, Month::May, 15, 8 , 48, 7, 577);
+        $actual = $dateTime->withMinute(4);
+        self::assertNotSame($dateTime, $actual);
+        self::assertSame(1987, $dateTime->year());
+        self::assertSame(Month::May, $dateTime->month());
+        self::assertSame(15, $dateTime->day());
+        self::assertSame(8, $dateTime->hour());
+        self::assertSame(48, $dateTime->minute());
+        self::assertSame(7, $dateTime->second());
+        self::assertSame(577, $dateTime->millisecond());
+    }
+
+    /** Ensure withMinute() throws when given an invalid minute. */
+    #[DataProvider("invalidMinutes")]
+    public function testWithMinute3(int $minute): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected minute between 0 and 59 inclusive, found {$minute}");
+        DateTime::create(1976, Month::February, 21, 9, 41)
+            ->withMinute($minute);
+    }
+
+    /** Ensure withSecond() sets the correct second. */
+    #[DataProvider("validSeconds")]
+    public function testWithSecond1(int $second): void
+    {
+        // ensure it starts out with a different minute
+        $initialSecond = ($second + 30) % 60;
+        $dateTime = DateTime::create(2008, Month::November, 21, 21, 8, $initialSecond);
+        self::assertSame(2008, $dateTime->year());
+        self::assertSame(Month::November, $dateTime->month());
+        self::assertSame(21, $dateTime->day());
+        self::assertSame(21, $dateTime->hour());
+        self::assertSame(8, $dateTime->minute());
+        self::assertSame($initialSecond, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+        $dateTime = $dateTime->withSecond($second);
+        self::assertSame(2008, $dateTime->year());
+        self::assertSame(Month::November, $dateTime->month());
+        self::assertSame(21, $dateTime->day());
+        self::assertSame(21, $dateTime->hour());
+        self::assertSame(8, $dateTime->minute());
+        self::assertSame($second, $dateTime->second());
+        self::assertSame(0, $dateTime->millisecond());
+    }
+
+    /** Ensure withSecond() preserves immutability. */
+    public function testWithSecond2(): void
+    {
+        $dateTime = DateTime::create(1969, Month::March, 3, 18 , 33, 17, 141);
+        $actual = $dateTime->withSecond(53);
+        self::assertNotSame($dateTime, $actual);
+        self::assertSame(1969, $dateTime->year());
+        self::assertSame(Month::March, $dateTime->month());
+        self::assertSame(3, $dateTime->day());
+        self::assertSame(18, $dateTime->hour());
+        self::assertSame(33, $dateTime->minute());
+        self::assertSame(17, $dateTime->second());
+        self::assertSame(141, $dateTime->millisecond());
+    }
+
+    /** Ensure withSecond() throws when given an invalid second. */
+    #[DataProvider("invalidSeconds")]
+    public function testWithSecond3(int $second): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected second between 0 and 59 inclusive, found {$second}");
+        DateTime::create(1974, Month::June, 5, 22, 59)
+            ->withSecond($second);
+    }
+
+    /** Ensure withMillisecond() sets the correct millisecond. */
+    #[DataProvider("validMilliseconds")]
+    public function testWithMillisecond1(int $millisecond): void
+    {
+        // ensure it starts out with a different minute
+        $initialMillisecond = ($millisecond + 500) % 1000;
+        $dateTime = DateTime::create(1989, Month::August, 14, 10, 49, 28, $initialMillisecond);
+        self::assertSame(1989, $dateTime->year());
+        self::assertSame(Month::August, $dateTime->month());
+        self::assertSame(14, $dateTime->day());
+        self::assertSame(10, $dateTime->hour());
+        self::assertSame(49, $dateTime->minute());
+        self::assertSame(28, $dateTime->second());
+        self::assertSame($initialMillisecond, $dateTime->millisecond());
+        $dateTime = $dateTime->withMillisecond($millisecond);
+        self::assertSame(1989, $dateTime->year());
+        self::assertSame(Month::August, $dateTime->month());
+        self::assertSame(14, $dateTime->day());
+        self::assertSame(10, $dateTime->hour());
+        self::assertSame(49, $dateTime->minute());
+        self::assertSame(28, $dateTime->second());
+        self::assertSame($millisecond, $dateTime->millisecond());
+    }
+
+    /** Ensure withMillisecond() preserves immutability. */
+    public function testWithMillisecond2(): void
+    {
+        $dateTime = DateTime::create(1963, Month::January, 30, 23 , 4, 31, 835);
+        $actual = $dateTime->withMillisecond(401);
+        self::assertNotSame($dateTime, $actual);
+        self::assertSame(1963, $dateTime->year());
+        self::assertSame(Month::January, $dateTime->month());
+        self::assertSame(30, $dateTime->day());
+        self::assertSame(23, $dateTime->hour());
+        self::assertSame(4, $dateTime->minute());
+        self::assertSame(31, $dateTime->second());
+        self::assertSame(835, $dateTime->millisecond());
+    }
+
+    /** Ensure withMillisecond() throws when given an invalid millisecond. */
+    #[DataProvider("invalidMilliseconds")]
+    public function testWithMillisecond3(int $millisecond): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");
+        DateTime::create(1937, Month::May, 17, 3, 31, 18, 392)
+            ->withMillisecond($millisecond);
+    }
+
+    /** Ensure a time zone can be set. */
+    public function testWithTimeZone1(): void
+    {
+        // 2025-03-04T20:04:37.000Z
+        $dateTime = DateTime::fromUnixTimestamp(1741118677);
+        self::assertNotSame("+0200", $dateTime->timeZone()->name());
+        $timeZone = TimeZone::parse("+0200");
+        $dateTime = $dateTime->withTimeZone($timeZone);
+        self::assertSame($timeZone->name(), $dateTime->timeZone()->name());
+        self::assertSame($timeZone->sdtOffset()->hours(), $dateTime->timeZone()->sdtOffset()->hours());
+        self::assertSame($timeZone->sdtOffset()->minutes(), $dateTime->timeZone()->sdtOffset()->minutes());
+    }
+
+    /** Ensure setting a time zone is immutable. */
+    public function testWithTimeZone3(): void
+    {
+        // 2025-03-04T20:04:37.000Z
+        $dateTime = DateTime::fromUnixTimestamp(1741118677);
+        self::assertNotSame("+0200", $dateTime->timeZone()->name());
+        $expectedYear = $dateTime->year();
+        $expectedMonth = $dateTime->month();
+        $expectedDay = $dateTime->day();
+        $expectedHour = $dateTime->hour();
+        $expectedMinute = $dateTime->minute();
+        $expectedSecond = $dateTime->second();
+        $expectedMillisecond = $dateTime->millisecond();
+        $expectedTimeZoneName = $dateTime->timeZone()->name();
+        $expectedTimeZoneOffset = $dateTime->timeZone()->sdtOffset();
+
+        $actual = $dateTime->withTimeZone(TimeZone::parse("+0200"));
+
+        self::assertNotSame($dateTime, $actual);
+        self::assertSame($expectedTimeZoneName, $dateTime->timeZone()->name());
+        self::assertSame($expectedTimeZoneOffset, $dateTime->timeZone()->sdtOffset());
+        self::assertSame($expectedYear, $dateTime->year());
+        self::assertSame($expectedMonth, $dateTime->month());
+        self::assertSame($expectedDay, $dateTime->day());
+        self::assertSame($expectedHour, $dateTime->hour());
+        self::assertSame($expectedMinute, $dateTime->minute());
+        self::assertSame($expectedSecond, $dateTime->second());
+        self::assertSame($expectedMillisecond, $dateTime->millisecond());
+    }
+
+    /** Ensure we can correctly identify a DateTime is before another. */
+    #[DataProvider("dateTimesAndLaterDateTimes")]
+    public function testIsBefore1(int $firstUnixMilliseconds, int $secondUnixMilliseconds): void
+    {
+        self::assertTrue(
+            DateTime::fromUnixTimestampMs($firstUnixMilliseconds)
+                ->isBefore(DateTime::fromUnixTimestampMs($secondUnixMilliseconds))
+        );
+    }
+
+    /** Ensure we can correctly identify a DateTime is not before another. */
+    #[DataProvider("dateTimesAndEarlierDateTimes")]
+    public function testIsBefore2(int $firstUnixMilliseconds, int $secondUnixMilliseconds): void
+    {
+        self::assertFalse(
+            DateTime::fromUnixTimestampMs($firstUnixMilliseconds)
+                ->isBefore(DateTime::fromUnixTimestampMs($secondUnixMilliseconds))
+        );
+    }
+
+    /** Ensure DateTime instances are not before themselves. */
+    #[DataProvider("unixMillisecondTimestamps")]
+    public function testIsBefore3(int $unixMilliseconds): void
+    {
+        self::assertFalse(
+            DateTime::fromUnixTimestampMs($unixMilliseconds)
+                ->isBefore(DateTime::fromUnixTimestampMs($unixMilliseconds))
+        );
+    }
+
+    /** Ensure we can correctly identify a DateTime is before another. */
+    #[DataProvider("dateTimesAndEarlierDateTimes")]
+    public function testIsAfter1(int $firstUnixMilliseconds, int $secondUnixMilliseconds): void
+    {
+        self::assertTrue(
+            DateTime::fromUnixTimestampMs($firstUnixMilliseconds)
+                ->isAfter(DateTime::fromUnixTimestampMs($secondUnixMilliseconds))
+        );
+    }
+
+    /** Ensure we can correctly identify a DateTime is not after another. */
+    #[DataProvider("dateTimesAndLaterDateTimes")]
+    public function testIsAfter2(int $firstUnixMilliseconds, int $secondUnixMilliseconds): void
+    {
+        self::assertFalse(
+            DateTime::fromUnixTimestampMs($firstUnixMilliseconds)
+                ->isAfter(DateTime::fromUnixTimestampMs($secondUnixMilliseconds))
+        );
+    }
+
+    /** Ensure DateTime instances are not after themselves. */
+    #[DataProvider("unixMillisecondTimestamps")]
+    public function testIsAfter3(int $unixMilliseconds): void
+    {
+        self::assertFalse(
+            DateTime::fromUnixTimestampMs($unixMilliseconds)
+                ->isAfter(DateTime::fromUnixTimestampMs($unixMilliseconds))
+        );
+    }
+
+    /** Ensure we can correctly identify a DateTime is equal to another. */
+    #[DataProvider("gregorianComponentsWithMillisecondTimestamps")]
+    public function testIsEqualTo1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, TimeZone $timeZone, int $unixTimestampMs): void
+    {
+        self::assertTrue(
+            DateTime::fromUnixTimestampMs($unixTimestampMs)
+                ->isEqualTo(DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone))
+        );
+    }
+
+    /** Ensure we can identify DateTime instances are not equal to others. */
+    #[DataProvider("unequalUnixMillisecondTimestamps")]
+    public function testIsEqualTo2(int $firstUnixMilliseconds, int $secondUnixMilliseconds): void
+    {
+        self::assertFalse(
+            DateTime::fromUnixTimestampMs($firstUnixMilliseconds)
+                ->isEqualTo(DateTime::fromUnixTimestampMs($secondUnixMilliseconds))
+        );
+    }
+
+    /** Ensure we can identify DateTime instances are not equal to others of a different implementation. */
+    #[DataProvider("dateTimesAndUnequalOtherImplementations")]
+    public function testIsEqualTo3(int $firstUnixMs, DateTimeContract $second): void
+    {
+        self::assertFalse(DateTime::fromUnixTimestampMs($firstUnixMs)->isEqualTo($second));
+    }
+
+    /** Ensure a date is in the same year as all dates in that year. */
+    #[DataProvider("datesWithAllDatesInSameYear")]
+    public function testIsInSameYearAs1(int $testUnixTimestamp, int $sameYearUnixTimestamp): void
+    {
+        self::assertTrue(DateTime::fromUnixTimestamp($testUnixTimestamp)->isInSameYearAs(DateTime::fromUnixTimestamp($sameYearUnixTimestamp)));
+    }
+
+    /** Ensure dates that are not in the same year are detected correctly. */
+    #[DataProvider("datesAndFirstMsOfNextYear")]
+    #[DataProvider("datesAndLastMsOfPreviousYear")]
+    #[DataProvider("datesInTwoDifferentYears")]
+    public function testIsInSameYearAs2(DateTime $first, DateTime $second): void
+    {
+        self::assertFalse($first->isInSameYearAs($second));
+    }
+
+
+    /** Ensure a date is in the same year as all dates in that year. */
+    #[DataProvider("datesWithAllDatesInSameMonth")]
+    public function testIsInSameMonthAs1(DateTime $testDateTime, DateTime $sameMonthDateTime): void
+    {
+        self::assertTrue($testDateTime->isInSameYearAs($sameMonthDateTime));
+    }
+
+    /**
+     * Ensure now() uses the current microtime.
+     *
+     * TODO use Mokkd when available.
+     */
+    #[DataProvider("microtimesAndDates")]
+    public function testNow1(float $seconds, DateTime $expected): void
+    {
+        $cleanup = static fn() => uopz_unset_return("microtime");
+
+        $microtime = static function(mixed $arg) use ($seconds): float
+        {
+            DateTimeTest::assertSame(true, $arg);
+            return $seconds;
+        };
+
+        $guard = new class($cleanup)
+        {
+            private $closure;
+
+            public function __construct(callable $closure)
+            {
+                $this->closure = $closure;
+            }
+
+            public function __destruct()
+            {
+                ($this->closure)();
+            }
+        };
+
+        uopz_set_return("microtime", $microtime, true);
+        $actual = DateTime::now();
+        self::assertSame($expected->unixTimestamp(), $actual->unixTimestamp());
+        self::assertSame($expected->unixTimestampMs(), $actual->unixTimestampMs());
+        self::assertSame($expected->year(), $actual->year());
+        self::assertSame($expected->month(), $actual->month());
+        self::assertSame($expected->day(), $actual->day());
+        self::assertSame($expected->hour(), $actual->hour());
+        self::assertSame($expected->minute(), $actual->minute());
+        self::assertSame($expected->second(), $actual->second());
+        self::assertSame($expected->millisecond(), $actual->millisecond());
     }
 
     // TODO millisecondsBeforeEpoch()
     // TODO millisecondsAfterEpoch()
-    // TODO syncUnix()
     // TODO syncGregorianDecrementHour()
     // TODO syncGregorianIncrementHour()
     // TODO syncGregorianPostEpoch()
     // TODO syncGregorianPreEpoch()
     // TODO syncGregorian()
-    // TODO now()
-    // TODO withDate()
-    // TODO year()
-    // TODO month()
-    // TODO day()
-    // TODO hour()
-    // TODO minute()
-    // TODO second()
-    // TODO millisecond()
-    // TODO weekday()
-    // TODO withTime()
-    // TODO withHour()
-    // TODO hour()
-    // TODO withMinute()
-    // TODO minute()
-    // TODO withSecond()
-    // TODO second()
-    // TODO withMillisecond()
-    // TODO millisecond()
-    // TODO unixTimestamp()
-    // TODO unixTimestampMs()
-    // TODO withTimeZone()
-    // TODO timeZone()
-    // TODO isBefore()
-    // TODO isAfter()
-    // TODO isEqualTo()
-    // TODO isInSameYearAs()
     // TODO isInSameMonthAs()
     // TODO isOnSameDayAs()
     // TODO isInSameHourAs()
