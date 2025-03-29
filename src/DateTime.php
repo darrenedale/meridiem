@@ -133,7 +133,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         return ($year % 4) === 0 && (($year % 100) !== 0 || ($year % 400) === 0);
     }
 
-    protected function compareUnix(self $other): int
+    protected function compareUnix(DateTimeContract $other): int
     {
         return $this->unixMs <=> $other->unixTimestampMs();
     }
@@ -444,7 +444,7 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         }
 
         if (self::MinMillisecond > $millisecond || self::MaxMillisecond < $millisecond) {
-            throw new RuntimeException("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");;
+            throw new RuntimeException("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");
         }
 
         return new self($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone);

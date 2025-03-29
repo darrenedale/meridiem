@@ -19,8 +19,6 @@ use Meridiem\Weekday;
 use Mockery;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 use RuntimeException;
 
 #[CoversClass(DateTime::class)]
@@ -35,15 +33,15 @@ class DateTimeTest extends TestCase
     private static function mockDateTime(int $year = UnixEpoch::Year, Month $month = UnixEpoch::Month, int $day = UnixEpoch::Day, int $hour = UnixEpoch::Hour, int $minute = UnixEpoch::Minute, int $second = UnixEpoch::Second, int $millisecond = UnixEpoch::Millisecond, int $timestamp = 0): DateTimeContract
     {
         $dateTime = Mockery::mock(DateTimeContract::class);
-        $dateTime->allows("year")()->andReturn($year)->byDefault();
-        $dateTime->allows("month")()->andReturn($month)->byDefault();
-        $dateTime->allows("day")()->andReturn($day)->byDefault();
-        $dateTime->allows("hour")()->andReturn($hour)->byDefault();
-        $dateTime->allows("minute")()->andReturn($minute)->byDefault();
-        $dateTime->allows("second")()->andReturn($second)->byDefault();
-        $dateTime->allows("millisecond")()->andReturn($millisecond)->byDefault();
-        $dateTime->allows("unixTimestampMs")()->andReturn($timestamp)->byDefault();
-        $dateTime->allows("unixTimestamp")()->andReturn((int) floor($timestamp / 1000.0))->byDefault();
+        $dateTime->allows("year")->andReturn($year)->byDefault();
+        $dateTime->allows("month")->andReturn($month)->byDefault();
+        $dateTime->allows("day")->andReturn($day)->byDefault();
+        $dateTime->allows("hour")->andReturn($hour)->byDefault();
+        $dateTime->allows("minute")->andReturn($minute)->byDefault();
+        $dateTime->allows("second")->andReturn($second)->byDefault();
+        $dateTime->allows("millisecond")->andReturn($millisecond)->byDefault();
+        $dateTime->allows("unixTimestampMs")->andReturn($timestamp)->byDefault();
+        $dateTime->allows("unixTimestamp")->andReturn((int) floor($timestamp / 1000.0))->byDefault();
         return $dateTime;
     }
 
