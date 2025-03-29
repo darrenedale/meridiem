@@ -13,7 +13,6 @@ use Meridiem\DateTime;
 use Meridiem\GregorianRatios;
 use Meridiem\Month;
 use InvalidArgumentException;
-use Meridiem\PhpDateTimeFormatter;
 use Meridiem\TimeZone;
 use Meridiem\UnixEpoch;
 use Meridiem\Weekday;
@@ -33,15 +32,15 @@ class DateTimeTest extends TestCase
     private static function mockDateTime(int $year = UnixEpoch::Year, Month $month = UnixEpoch::Month, int $day = UnixEpoch::Day, int $hour = UnixEpoch::Hour, int $minute = UnixEpoch::Minute, int $second = UnixEpoch::Second, int $millisecond = UnixEpoch::Millisecond, int $timestamp = 0): DateTimeContract
     {
         $dateTime = Mockery::mock(DateTimeContract::class);
-        $dateTime->shouldReceive('year')->zeroOrMoreTimes()->andReturn($year)->byDefault();
-        $dateTime->shouldReceive('month')->zeroOrMoreTimes()->andReturn($month)->byDefault();
-        $dateTime->shouldReceive('day')->zeroOrMoreTimes()->andReturn($day)->byDefault();
-        $dateTime->shouldReceive('hour')->zeroOrMoreTimes()->andReturn($hour)->byDefault();
-        $dateTime->shouldReceive('minute')->zeroOrMoreTimes()->andReturn($minute)->byDefault();
-        $dateTime->shouldReceive('second')->zeroOrMoreTimes()->andReturn($second)->byDefault();
-        $dateTime->shouldReceive('millisecond')->zeroOrMoreTimes()->andReturn($millisecond)->byDefault();
-        $dateTime->shouldReceive('unixTimestampMs')->zeroOrMoreTimes()->andReturn($timestamp)->byDefault();
-        $dateTime->shouldReceive('unixTimestamp')->zeroOrMoreTimes()->andReturn((int) floor($timestamp / 1000.0))->byDefault();
+        $dateTime->allows("year")()->andReturn($year)->byDefault();
+        $dateTime->allows("month")()->andReturn($month)->byDefault();
+        $dateTime->allows("day")()->andReturn($day)->byDefault();
+        $dateTime->allows("hour")()->andReturn($hour)->byDefault();
+        $dateTime->allows("minute")()->andReturn($minute)->byDefault();
+        $dateTime->allows("second")()->andReturn($second)->byDefault();
+        $dateTime->allows("millisecond")()->andReturn($millisecond)->byDefault();
+        $dateTime->allows("unixTimestampMs")()->andReturn($timestamp)->byDefault();
+        $dateTime->allows("unixTimestamp")()->andReturn((int) floor($timestamp / 1000.0))->byDefault();
         return $dateTime;
     }
 
@@ -554,7 +553,7 @@ class DateTimeTest extends TestCase
     /** A selection of dates and the weekdays for them. */
     public static function datesAndWeekdays(): iterable
     {
-        // a week's worth of days and their weekdays, post-epoch
+        // a week"s worth of days and their weekdays, post-epoch
         yield "monday-2025-02-24" => [2025, Month::February, 24, Weekday::Monday];
         yield "tuesday-2025-02-25" => [2025, Month::February, 25, Weekday::Tuesday];
         yield "wednesday-2025-02-26" => [2025, Month::February, 26, Weekday::Wednesday];
@@ -563,7 +562,7 @@ class DateTimeTest extends TestCase
         yield "saturday-2025-03-01" => [2025, Month::March, 1, Weekday::Saturday];
         yield "sunday-2025-03-02" => [2025, Month::March, 2, Weekday::Sunday];
 
-        // a week's worth of days and their weekdays, pre-epoch
+        // a week"s worth of days and their weekdays, pre-epoch
         yield "monday-1953-09-07" => [1953, Month::September, 7, Weekday::Monday];
         yield "tuesday-1953-09-08" => [1953, Month::September, 8, Weekday::Tuesday];
         yield "wednesday-1953-09-09" => [1953, Month::September, 9, Weekday::Wednesday];
@@ -831,24 +830,290 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Some dates paired with all dates in the same month. */
-    public static function datesWithAllDatesInSameMonth(): iterable
+    public static function daysInSameMonth(): iterable
     {
-        // first, last and mid-month day for all months in a post-epoch year, a leap-year and a pre-epoch year
-        foreach ([2021, 2012, 1959] as $year) {
-            foreach (Month::cases() as $month) {
-                foreach ([1, 15, 31] as $day) {
-                    $day = min($day, $month->dayCount($year));
+        $firstDays = [1, 8, 13, 15, 18, 25];
+        $secondDays = [1, 5, 11, 16, 18, 21, 27];
 
-                    // pair with every day in the same month (including itself)
-                    for ($otherDay = 1; $otherDay < $month->dayCount($year); $otherDay++) {
-                        yield sprintf("same-month-%02d-%02d-%02d-and-%02d", $year, $month->value, $day, $otherDay) => [
-                            DateTime::create($year, $month, $day, 13, 12, 48, 105),
-                            DateTime::create($year, $month, $otherDay, 7, 55, 15, 337),
-                        ];
+        foreach ([2000, 1991, 1963] as $year) {
+            foreach (Month::cases() as $month) {
+                $lastDay = $month->dayCount($year);
+
+                foreach ([...$firstDays, $lastDay] as $day) {
+                    foreach ([...$secondDays, $lastDay] as $otherDay) {
+                        yield sprintf("same-month-%04d-%02s-%02d-and-%04d-%02s-%02d", $year, $month->value, $day, $year, $month->value, $otherDay) => [$year, $month, $day, $otherDay];
                     }
                 }
             }
+        }
+    }
+
+    public static function daysInDifferentMonths(): iterable
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        // dates at the boundaries between consecutive months for a leap year, post-epoch year and pre-epoch year
+        foreach ([2000, 1991, 1963] as $year) {
+            foreach (Month::cases() as $month) {
+                $first = DateTime::create($year, $month, $month->dayCount($year), 23, 59, 59, 999, $utc);
+
+                if (Month::December === $month) {
+                    $second = DateTime::create($year + 1, $month->next(), 1, 0, 0, 0, 0, $utc);
+                } else {
+                    $second = DateTime::create($year, $month->next(), 1, 0, 0, 0, 0, $utc);
+                }
+
+                yield sprintf("%04d-%s-and-%s", $year, $month->name, $month->next()->name) => [$first, $second];
+            }
+        }
+
+        // same month, different year
+        foreach (Month::cases() as $month) {
+            yield sprintf("%s-in-%04d-and-%04d", $month->name, 1996, 1967) => [
+                DateTime::create(1996, $month, 14, 12, 11, 6, 421, $utc),
+                DateTime::create(1967, $month, 21, 23, 1, 51, 883, $utc),
+            ];
+        }
+    }
+
+    public static function hoursInSameDay(): iterable
+    {
+        $firstHours = [1, 8, 13, 15, 18, 23];
+        $secondHours = [1, 5, 11, 16, 18, 21, 23];
+
+        foreach ([2000, 1991, 1963] as $year) {
+            foreach (Month::cases() as $month) {
+                $lastDay = $month->dayCount($year);
+
+                foreach ([1, 15, $lastDay] as $day) {
+                    foreach ($firstHours as $firstHour) {
+                        foreach ($secondHours as $secondHour) {
+                            yield sprintf("same-day-%04d-%02s-%02d-%02dh-and-%04d-%02s-%02d-%02dh", $year, $month->value, $day, $firstHour, $year, $month->value, $day, $secondHour) => [$year, $month, $day, $firstHour, $secondHour, $secondHour];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static function timesInDifferentDays(): iterable
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        /** @var Month[] $months */
+        $months = [
+            Month::January, Month::June, Month::May, Month::April, Month::May,
+            Month::November, Month::March, Month::February, Month::April, Month::October,
+            Month::November, Month::October, Month::March, Month::June, Month::February,
+            Month::May, Month::March, Month::April, Month::December, Month::November,
+            Month::March, Month::June, Month::September, Month::May, Month::June,
+            Month::August, Month::September, Month::August, Month::December, Month::July,
+            Month::December, Month::January,
+        ];
+
+        // times at the boundaries between consecutive days for a leap year, post-epoch year and pre-epoch year
+        foreach ([2000, 1991, 1963] as $year) {
+            for ($day = 1; $day < 31; ++$day) {
+                $first = DateTime::create($year, $months[$day], $day, 23, 59, 59, 999, $utc);
+                $second = DateTime::create($year, $months[$day], $day + 1, 0, 0, 0, 0, $utc);
+
+                yield sprintf("%04d-%s-%02d-and-%02d", $year, $months[$day]->name, $day, $day + 1) => [$first, $second];
+            }
+
+            yield sprintf("%04d-December-31-and-January-01", $year) => [
+                DateTime::create($year, Month::December, 31, 23, 59, 59, 999, $utc),
+                DateTime::create($year + 1, Month::January, 1, 0, 0, 0, 0, $utc),
+            ];
+        }
+
+        // same month and day, different year
+        foreach (Month::cases() as $month) {
+            yield sprintf("%02d-%s-in-%04d-and-%04d", 14, $month->name, 1996, 1967) => [
+                DateTime::create(1996, $month, 14, 12, 11, 6, 421, $utc),
+                DateTime::create(1967, $month, 14, 23, 1, 51, 883, $utc),
+            ];
+        }
+    }
+
+    /** Selection of date-times in the same hour. */
+    public static function timesInSameHour(): iterable
+    {
+        $firstMinutes = [1, 7, 11, 18, 22, 31, 33, 42, 49, 54];
+        $secondMinutes = [1, 5, 10, 15, 24, 30, 33, 40, 44, 51];
+
+        /**
+         * One month to use for each hour in the test data so that we cover a selection
+         * @var Month[] $months
+         */
+        $months = [
+            Month::October, Month::November, Month::March, Month::February, Month::June,
+            Month::December, Month::March, Month::February, Month::October, Month::October,
+            Month::January, Month::May, Month::June, Month::May, Month::April,
+            Month::March, Month::May, Month::December, Month::April, Month::November,
+            Month::June, Month::September, Month::June, Month::April,
+        ];
+
+        // One day to use for each hour in the test data so that we cover a selection
+        $days = [14, 19, 31, 12, 16, 16, 13, 28, 31, 8, 15, 13, 12, 23, 11, 24, 5, 7, 30, 9, 23, 21, 1, 19];
+
+        foreach ([1959, 1983] as $year) {
+            for ($hour = 0; $hour < 24; ++$hour) {
+                foreach ($firstMinutes as $firstMinute) {
+                    foreach ($secondMinutes as $secondMinute) {
+                        yield [$year, $months[$hour], $days[$hour], $hour, $firstMinute, $secondMinute];
+                    }
+                }
+            }
+        }
+    }
+
+    /** Selection of date-times not in the same hour. */
+    public static function timesInDifferentHours(): iterable
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        /**
+         * One month to use for each hour in the test data so that we cover a selection
+         * @var Month[] $months
+         */
+        $months = [
+            Month::January, Month::June, Month::May, Month::April, Month::May,
+            Month::November, Month::March, Month::February, Month::April, Month::October,
+            Month::November, Month::October, Month::March, Month::June, Month::February,
+            Month::May, Month::March, Month::April, Month::December, Month::November,
+            Month::March, Month::June, Month::September, Month::February,
+        ];
+
+        // One day to use for each hour in the test data so that we cover a selection
+        $days = [14, 19, 31, 12, 16, 16, 13, 28, 30, 8, 15, 13, 12, 23, 11, 24, 5, 7, 30, 9, 23, 21, 1, 19];
+
+        // times at the boundaries between consecutive hours for a post-epoch year and pre-epoch year
+        foreach ([1982, 1961] as $year) {
+            for ($hour = 0; $hour < 23; ++$hour) {
+                $first = DateTime::create($year, $months[$hour], $days[$hour], $hour, 59, 59, 999, $utc);
+                $second = DateTime::create($year, $months[$hour], $days[$hour], $hour + 1, 0, 0, 0, $utc);
+
+                // end of 2300 and start of 0000 the next day
+                yield sprintf("%04d-%s-%02d-%02d:59:59.999-and-%02d:00:00.000", $year, $months[$hour]->name, $days[$hour], $hour, $hour + 1) => [$first, $second];
+            }
+
+            yield sprintf("%04d-October-18-23:59:59.000-and-%04d-October-19-00:00:00.000", $year, $year + 1) => [
+                DateTime::create($year, Month::October, 18, 23, 59, 59, 999, $utc),
+                DateTime::create($year, Month::October, 19, 0, 0, 0, 0, $utc),
+            ];
+        }
+
+        // leap year - last hour in 29th and first hour in 1st
+        yield "leap-year-1996-02-29-23:59:59.999-and-1996-03-01-00:00:00.000" => [
+            DateTime::create(1996, Month::February, 29, 23, 59, 59, 999, $utc),
+            DateTime::create(1996, Month::March, 1, 0, 0, 0, 0, $utc),
+        ];
+
+        // leap year - last hour in 28th and first hour in 29th
+        yield "leap-year-1988-02-28-23:59:59.999-and-1988-02-29-00:00:00.000" => [
+            DateTime::create(1988, Month::February, 28, 23, 59, 59, 999, $utc),
+            DateTime::create(1988, Month::February, 29, 0, 0, 0, 0, $utc),
+        ];
+
+        // same month, day and hour, different year
+        foreach (Month::cases() as $month) {
+            yield sprintf("%02d:00-%02d-%s-in-%04d-and-%04d", 19, 7, $month->name, 1948, 1979) => [
+                DateTime::create(1948, $month, 7, 19, 23, 19, 630, $utc),
+                DateTime::create(1979, $month, 7, 19, 44, 30, 750, $utc),
+            ];
+        }
+    }
+
+    /** Selection of date-times in the same minute. */
+    public static function timesInSameMinute(): iterable
+    {
+        $firstSeconds = [1, 6, 12, 19, 23, 35, 38, 43, 48, 54];
+        $secondSeconds = [1, 8, 13, 16, 22, 31, 34, 41, 42, 58];
+
+        /**
+         * One month to use for each hour in the test data so that we cover a selection
+         * @var Month[] $months
+         */
+        $months = [
+            Month::October, Month::June, Month::January, Month::February, Month::February,
+            Month::August, Month::August, Month::November, Month::December, Month::December,
+            Month::November, Month::January, Month::November, Month::March, Month::February,
+            Month::August, Month::November, Month::June, Month::August, Month::January,
+            Month::June, Month::January, Month::November, Month::September,
+        ];
+
+        // One day to use for each hour in the test data so that we cover a selection
+        $days = [20, 29, 21, 23, 15, 19, 23, 23, 4, 1, 18, 8, 7, 10, 3, 1, 15, 19, 26, 27, 17, 14, 24, 15];
+
+        foreach ([1947, 2006] as $year) {
+            for ($hour = 0; $hour < 24; ++$hour) {
+                for ($minute = 0; $minute < 60; $minute += 5) {
+                    foreach ($firstSeconds as $firstSecond) {
+                        foreach ($secondSeconds as $secondSecond) {
+                            yield [$year, $months[$hour], $days[$hour], $hour, $minute, $firstSecond, $secondSecond];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Selection of date-times not in the same minute. */
+    public static function timesInDifferentMinutes(): iterable
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        /**
+         * One month to use for each hour in the test data so that we cover a selection
+         * @var Month[] $months
+         */
+        $months = [
+            Month::January, Month::June, Month::May, Month::April, Month::May,
+            Month::November, Month::March, Month::February, Month::April, Month::October,
+            Month::November, Month::October, Month::March, Month::June, Month::February,
+            Month::May, Month::March, Month::April, Month::December, Month::November,
+            Month::March, Month::June, Month::September, Month::February,
+        ];
+
+        // One day to use for each hour in the test data so that we cover a selection
+        $days = [1, 23, 1, 7, 24, 9, 22, 6, 30, 27, 27, 3, 23, 25, 21, 31, 5, 26, 14, 24, 20, 5, 19, 12];
+
+        // times at the boundaries between consecutive minutes for a post-epoch year and pre-epoch year
+        foreach ([1989, 1966] as $year) {
+            for ($hour = 0; $hour < 23; ++$hour) {
+                for ($minute = 0; $minute < 59; $minute += 5) {
+                    $first = DateTime::create($year, $months[$hour], $days[$hour], $hour, $minute, 59, 999, $utc);
+                    $second = DateTime::create($year, $months[$hour], $days[$hour], $hour, $minute + 1, 0, 0, $utc);
+
+                    // end of 2300 and start of 0000 the next day
+                    yield sprintf("%04d-%s-%02d-%02d:%02d:59.999-and-%02d:%02d:00.000", $year, $months[$hour]->name, $days[$hour], $hour, $minute, $hour, $minute + 1) => [$first, $second];
+                }
+            }
+
+            yield sprintf("%04d-March-9-23:59:59.000-and-%04d-March-10-00:00:00.000", $year, $year + 1) => [
+                DateTime::create($year, Month::March, 9, 23, 59, 59, 999, $utc),
+                DateTime::create($year, Month::March, 10, 0, 0, 0, 0, $utc),
+            ];
+        }
+
+        // leap year - last minute in 29th and first minute in 1st
+        yield "leap-year-1988-02-29-23:59:59.999-and-1988-03-01-00:00:00.000" => [
+            DateTime::create(1988, Month::February, 29, 23, 59, 59, 999, $utc),
+            DateTime::create(1988, Month::March, 1, 0, 0, 0, 0, $utc),
+        ];
+
+        // leap year - last minute in 28th and first minute in 29th
+        yield "leap-year-1976-02-28-23:59:59.999-and-1976-02-29-00:00:00.000" => [
+            DateTime::create(1976, Month::February, 28, 23, 59, 59, 999, $utc),
+            DateTime::create(1976, Month::February, 29, 0, 0, 0, 0, $utc),
+        ];
+
+        // same month, day, hour and minute different year
+        foreach (Month::cases() as $month) {
+            yield sprintf("%02d:%02d-%s-in-%04d-and-%04d", 8, 38, $month->name, 1948, 1979) => [
+                DateTime::create(1948, $month, 11, 8, 38, 51, 15, $utc),
+                DateTime::create(1979, $month, 11, 8, 38, 5, 332, $utc),
+            ];
         }
     }
 
@@ -1214,7 +1479,7 @@ class DateTimeTest extends TestCase
     }
 
     /** Ensure we can correctly instantiate from unix timestamps. */
-    #[DataProvider('unixTimestamps')]
+    #[DataProvider("unixTimestamps")]
     public function testFromUnixTimestamp1(int $timestamp, int $expectedYear, Month $expectedMonth, int $expectedDay, int $expectedHour, int $expectedMinute, int $expectedSecond): void
     {
         $actual = DateTime::fromUnixTimestamp($timestamp);
@@ -2207,14 +2472,6 @@ class DateTimeTest extends TestCase
         self::assertFalse($first->isInSameYearAs($second));
     }
 
-
-    /** Ensure a date is in the same year as all dates in that year. */
-    #[DataProvider("datesWithAllDatesInSameMonth")]
-    public function testIsInSameMonthAs1(DateTime $testDateTime, DateTime $sameMonthDateTime): void
-    {
-        self::assertTrue($testDateTime->isInSameYearAs($sameMonthDateTime));
-    }
-
     /**
      * Ensure now() uses the current microtime.
      *
@@ -2259,6 +2516,96 @@ class DateTimeTest extends TestCase
         self::assertSame($expected->millisecond(), $actual->millisecond());
     }
 
+    /** Ensure days in the same month are detected correctly. */
+    #[DataProvider("daysInSameMonth")]
+    public function testIsInSameMonthAs1(int $year, Month $month, int $day, int $otherDay): void
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        self::assertTrue(DateTime::create($year, $month, $day, 3, 48, 11, 0, $utc)->isInSameMonthAs(DateTime::create($year, $month, $otherDay, 12, 1, 51, 0, $utc)));
+        self::assertTrue(DateTime::create($year, $month, $otherDay, 21, 17, 30, 0, $utc)->isInSameMonthAs(DateTime::create($year, $month, $day, 19, 15, 37, 0, $utc)));
+    }
+
+    /** Ensure days at start and end of same month are detected correctly. */
+    #[DataProvider("allMonths")]
+    public function testIsInSameMonthAs2(Month $month): void
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        # pre-epoch
+        self::assertTrue(DateTime::create(1955, $month, 1, 0, 0, 0, 0)->isInSameMonthAs(DateTime::create(1955, $month, $month->dayCount(1955), 0, 0, 0, 0, $utc)));
+
+        # post-epoch
+        self::assertTrue(DateTime::create(1981, $month, 1, 0, 0, 0, 0)->isInSameMonthAs(DateTime::create(1981, $month, $month->dayCount(1981), 0, 0, 0, 0, $utc)));
+
+        # leap-year
+        self::assertTrue(DateTime::create(1988, $month, 1, 0, 0, 0, 0)->isInSameMonthAs(DateTime::create(1988, $month, $month->dayCount(1988), 0, 0, 0, 0, $utc)));
+    }
+
+    /** Ensure days in different month are detected correctly. */
+    #[DataProvider("daysInDifferentMonths")]
+    public function testIsInSameMonthAs3(DateTime $first, DateTime $second): void
+    {
+        self::assertFalse($first->isInSameMonthAs($second));
+    }
+
+    /** Ensure times in the same day are detected correctly. */
+    #[DataProvider("hoursInSameDay")]
+    public function testIsInSameDayAs1(int $year, Month $month, int $day, int $hour, int $otherHour): void
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        // arbitrary times in the same day
+        self::assertTrue(DateTime::create($year, $month, $day, $hour, 28, 31, 22, $utc)->isOnSameDayAs(DateTime::create($year, $month, $day, $otherHour, 9, 23, 3, $utc)));
+        self::assertTrue(DateTime::create($year, $month, $day, $otherHour, 17, 30, 0, $utc)->isOnSameDayAs(DateTime::create($year, $month, $day, $hour, 15, 37, 0, $utc)));
+    }
+
+    /** Ensure times in different days are detected correctly. */
+    #[DataProvider("timesInDifferentDays")]
+    public function testIsInSameDayAs2(DateTime $first, DateTime $second): void
+    {
+        self::assertFalse($first->isOnSameDayAs($second));
+    }
+
+    /** Ensure times in the same hour are detected correctly. */
+    #[DataProvider("timesInSameHour")]
+    public function testIsInSameHourAs1(int $year, Month $month, int $day, int $hour, int $minute, int $otherMinute): void
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        // arbitrary times in the same hour
+        self::assertTrue(DateTime::create($year, $month, $day, $hour, $minute, 59, 824, $utc)->isInSameHourAs(DateTime::create($year, $month, $day, $hour, $otherMinute, 1, 22, $utc)));
+        self::assertTrue(DateTime::create($year, $month, $day, $hour, $otherMinute, 12, 7, $utc)->isInSameHourAs(DateTime::create($year, $month, $day, $hour, $minute, 39, 22, $utc)));
+    }
+
+    /** Ensure times in different hours are detected correctly. */
+    #[DataProvider("timesInDifferentHours")]
+    #[DataProvider("timesInDifferentDays")]
+    public function testIsInSameHourAs2(DateTime $first, DateTime $second): void
+    {
+        self::assertFalse($first->isInSameHourAs($second));
+    }
+
+    /** Ensure times in the same minute are detected correctly. */
+    #[DataProvider("timesInSameMinute")]
+    public function testIsInSameMinuteAs1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $otherSecond): void
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        // arbitrary times in the same minute
+        self::assertTrue(DateTime::create($year, $month, $day, $hour, $minute, $second, 296, $utc)->isInSameMinuteAs(DateTime::create($year, $month, $day, $hour, $minute, $otherSecond, 381, $utc)));
+        self::assertTrue(DateTime::create($year, $month, $day, $hour, $minute, $otherSecond, 989, $utc)->isInSameMinuteAs(DateTime::create($year, $month, $day, $hour, $minute, $second, 200, $utc)));
+    }
+
+    /** Ensure times in different minutes are detected correctly. */
+    #[DataProvider("timesInDifferentMinutes")]
+    #[DataProvider("timesInDifferentHours")]
+    #[DataProvider("timesInDifferentDays")]
+    public function testIsInSameMinuteAs2(DateTime $first, DateTime $second): void
+    {
+        self::assertFalse($first->isInSameMinuteAs($second));
+    }
+
     // TODO millisecondsBeforeEpoch()
     // TODO millisecondsAfterEpoch()
     // TODO syncGregorianDecrementHour()
@@ -2266,9 +2613,5 @@ class DateTimeTest extends TestCase
     // TODO syncGregorianPostEpoch()
     // TODO syncGregorianPreEpoch()
     // TODO syncGregorian()
-    // TODO isInSameMonthAs()
-    // TODO isOnSameDayAs()
-    // TODO isInSameHourAs()
-    // TODO isInSameMinuteAs()
     // TODO isInSameSecondAs()
 }
