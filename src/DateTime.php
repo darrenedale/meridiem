@@ -8,6 +8,7 @@ use LogicException;
 use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\Contracts\DateTimeComparison as DateTimeComparisonContract;
 use Meridiem\Contracts\TimeZone as TimeZoneContract;
+use RuntimeException;
 
 /**
  * Representation of a point in time in the Gregorian calendar.
@@ -126,15 +127,15 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
             ?: ($this->millisecond <=> $other->millisecond());
     }
 
-    protected function compareUnix(DateTimeContract $other): int
-    {
-        return $this->unixMs <=> $other->unixTimestampMs();
-    }
-
     /** Helper to check whether a year is a leap year. */
     protected static function isLeapYear(int $year): bool
     {
         return ($year % 4) === 0 && (($year % 100) !== 0 || ($year % 400) === 0);
+    }
+
+    protected function compareUnix(self $other): int
+    {
+        return $this->unixMs <=> $other->unixTimestampMs();
     }
 
     /** Helper to check whether the unix timestamp is currently clean. */
@@ -422,6 +423,30 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
      */
     public static function create(int $year, Month $month, int $day, int $hour = 0, int $minute = 0, int $second = 0, int $millisecond = 0, ?TimeZoneContract $timeZone = null): self
     {
+        if (self::MinYear > $year || self::MaxYear < $year) {
+            throw new RuntimeException("Expected year between -9999 and 9999 inclusive, found {$year}");
+        }
+
+        if (self::MinDay > $day || $month->dayCount($year) < $day) {
+            throw new RuntimeException("Expected day between 1 and {$month->dayCount($year)} inclusive, found {$day}");
+        }
+
+        if (self::MinHour > $hour || self::MaxHour < $hour) {
+            throw new RuntimeException("Expected hour between 0 and 23 inclusive, found {$hour}");
+        }
+
+        if (self::MinMinute > $minute || self::MaxMinute < $minute) {
+            throw new RuntimeException("Expected minute between 0 and 59 inclusive, found {$minute}");
+        }
+
+        if (self::MinSecond > $second || self::MaxSecond < $second) {
+            throw new RuntimeException("Expected second between 0 and 59 inclusive, found {$second}");
+        }
+
+        if (self::MinMillisecond > $millisecond || self::MaxMillisecond < $millisecond) {
+            throw new RuntimeException("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");;
+        }
+
         return new self($year, $month, $day, $hour, $minute, $second, $millisecond, $timeZone);
     }
 
@@ -740,6 +765,24 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         return 0 === $this->compareGregorian($other);
     }
 
+    /**
+     * Check whether this date is in the same year as another, each according to their own timezones.
+     *
+     * Effectively what you're asking is "does timezone A consider date-time A to be in the same year as timezone B
+     * considers date-time B to be in".
+     *
+     * For example, 1st January 2025 00:00:00 GMT is in the same year as 1st January 2025 00:00:00 EST, even though at
+     * that moment in time in London, New York still considers it to be 2024. This is because there's no single obvious
+     * and way to convert the points in time to a common timezone that always makes sense. If you need to normalise to a
+     * common timezone, do so explicitly:
+     *
+     *     $firstDateTime->isInSameYear($other->withTimeZone($secondDateTime->timeZone()));
+     *     // or
+     *     $firstDateTime->withTimeZone($utc)->isInSameYear($secondDateTime->withTimeZone($utc)))
+     *
+     * TODO consider adding an optional argument to do the above normalising automatically; or adding a UTC variant of
+     *  these methods that converts both to a common timezone before comparing
+     */
     public function isInSameYearAs(DateTimeContract $other): bool
     {
         return $this->year() === $other->year();

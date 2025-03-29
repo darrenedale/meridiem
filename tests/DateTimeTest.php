@@ -19,6 +19,9 @@ use Meridiem\Weekday;
 use Mockery;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use RuntimeException;
 
 #[CoversClass(DateTime::class)]
 class DateTimeTest extends TestCase
@@ -137,12 +140,21 @@ class DateTimeTest extends TestCase
     }
 
     /** Some invalid hours. */
+    /** All possible valid days. */
+    public static function allDays(): iterable
+    {
+        for ($day = 1; $day <= 31; $day++) {
+            yield sprintf("day-%02d", $day) => [$day];
+        }
+    }
+
+    /** A selection of invalid hours. */
     public static function invalidHours(): iterable
     {
-        yield "too-small" => [-1];
-        yield "too-large" => [24];
-        yield "min-int" => [PHP_INT_MIN];
-        yield "max-int" => [PHP_INT_MAX];
+        yield "hour-too-small" => [-1];
+        yield "hour-too-large" => [24];
+        yield "hour-min-int" => [PHP_INT_MIN];
+        yield "hour-max-int" => [PHP_INT_MAX];
     }
 
     /** All valid hours. */
@@ -153,13 +165,13 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Some invalid minutes. */
+    /** A selection of invalid minutes. */
     public static function invalidMinutes(): iterable
     {
-        yield "too-small" => [-1];
-        yield "too-large" => [60];
-        yield "min-int" => [PHP_INT_MIN];
-        yield "max-int" => [PHP_INT_MAX];
+        yield "minute-too-small" => [-1];
+        yield "minute-too-large" => [60];
+        yield "minute-min-int" => [PHP_INT_MIN];
+        yield "minute-max-int" => [PHP_INT_MAX];
     }
 
     /** All valid minutes. */
@@ -170,13 +182,13 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Some invalid seconds. */
+    /** A selection of invalid seconds. */
     public static function invalidSeconds(): iterable
     {
-        yield "too-small" => [-1];
-        yield "too-large" => [60];
-        yield "min-int" => [PHP_INT_MIN];
-        yield "max-int" => [PHP_INT_MAX];
+        yield "second-too-small" => [-1];
+        yield "second-too-large" => [60];
+        yield "second-min-int" => [PHP_INT_MIN];
+        yield "second-max-int" => [PHP_INT_MAX];
     }
 
     /** All valid seconds. */
@@ -187,19 +199,20 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Some invalid milliseconds. */
+    /** A selection of invalid milliseconds. */
     public static function invalidMilliseconds(): iterable
     {
-        yield "too-small" => [-1];
-        yield "too-large" => [1000];
-        yield "min-int" => [PHP_INT_MIN];
-        yield "max-int" => [PHP_INT_MAX];
+        yield "millisecond-too-small" => [-1];
+        yield "millisecond-too-large" => [1000];
+        yield "millisecond-min-int" => [PHP_INT_MIN];
+        yield "millisecond-max-int" => [PHP_INT_MAX];
     }
 
     /** All valid milliseconds. */
     public static function validMilliseconds(): iterable
     {
         for ($millisecond = 0; $millisecond < 1000; ++$millisecond) {
+            yield sprintf("millisecond-%02d", $millisecond) => [$millisecond];
             yield sprintf("millisecond-%02d", $millisecond) => [$millisecond];
         }
     }
@@ -1240,7 +1253,7 @@ class DateTimeTest extends TestCase
         self::assertSame(Month::February, $actual->month());
         self::assertSame(28, $actual->day());
 
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Expected day between 1 and 28 inclusive, found 29");
         DateTime::create($year, Month::February, 29);
     }
@@ -1364,7 +1377,7 @@ class DateTimeTest extends TestCase
     #[DataProvider("invalidYears")]
     public function testCreate12(int $year): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Expected year between -9999 and 9999 inclusive, found {$year}");
         DateTime::create($year, Month::April, 23);
     }
@@ -1373,7 +1386,7 @@ class DateTimeTest extends TestCase
     #[DataProvider("gregorianComponentsInvalidDays")]
     public function testCreate13(int $year, Month $month, int $day): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Expected day between 1 and {$month->dayCount($year)} inclusive, found {$day}");
         DateTime::create($year, $month, $day);
     }
@@ -1382,7 +1395,7 @@ class DateTimeTest extends TestCase
     #[DataProvider("invalidHours")]
     public function testCreate14(int $hour): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Expected hour between 0 and 23 inclusive, found {$hour}");
         DateTime::create(2025, Month::January, 1, $hour, 17, 44);
     }
@@ -1391,7 +1404,7 @@ class DateTimeTest extends TestCase
     #[DataProvider("invalidMinutes")]
     public function testCreate15(int $minute): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Expected minute between 0 and 59 inclusive, found {$minute}");
         DateTime::create(2025, Month::January, 1, 12, $minute, 13);
     }
@@ -1400,7 +1413,7 @@ class DateTimeTest extends TestCase
     #[DataProvider("invalidSeconds")]
     public function testCreate16(int $second): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Expected second between 0 and 59 inclusive, found {$second}");
         DateTime::create(2025, Month::January, 1, 12, 22, $second);
     }
@@ -1409,7 +1422,7 @@ class DateTimeTest extends TestCase
     #[DataProvider("invalidMilliseconds")]
     public function testCreate17(int $millisecond): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Expected millisecond between 0 and 999 inclusive, found {$millisecond}");
         DateTime::create(2025, Month::January, 1, 12, 22, 50, $millisecond);
     }

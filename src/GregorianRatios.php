@@ -2,6 +2,12 @@
 
 namespace Meridiem;
 
+/**
+ * Static class with constants for the ratios between components in Gregorian date-times.
+ *
+ * All components (Year, month, ...) are expressed in milliseconds as this is the precision to which Meridiem represents
+ * points in time, but some other useful ratios are also present.
+ */
 final class GregorianRatios
 {
     public const int MillisecondsPerSecond = 1000;
