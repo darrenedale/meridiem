@@ -28,7 +28,7 @@ enum Month: int
         };
     }
 
-    /** Determine if this Month is before another in the year\. */
+    /** Determine if this Month is before another in the year. */
     public function isBefore(Month $month): bool
     {
         return $this->value < $month->value;
