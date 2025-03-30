@@ -45,6 +45,7 @@ class DateTimeTest extends TestCase
         return $dateTime;
     }
 
+    /** A selection of years that are not valid. */
     public static function invalidYears(): iterable
     {
         yield "too-small" => [-10000];
@@ -53,10 +54,14 @@ class DateTimeTest extends TestCase
         yield "max-int" => [PHP_INT_MAX];
     }
 
-    /** All valid years. */
+    /** A selection of valid years. */
     public static function validYears(): iterable
     {
-        for ($year = -9999; $year <= 9999; ++$year) {
+        yield "year-min" => [-9999];
+        yield "year-max" => [9999];
+        yield "zero" => [0];
+
+        for ($year = 1; $year <= 2100; ++$year) {
             yield sprintf("year-%04d", $year) => [$year];
         }
     }
@@ -137,7 +142,6 @@ class DateTimeTest extends TestCase
         }
     }
 
-    /** Some invalid hours. */
     /** All possible valid days. */
     public static function allDays(): iterable
     {
@@ -841,6 +845,7 @@ class DateTimeTest extends TestCase
         }
     }
 
+    /** A selection of days in the same month. */
     public static function daysInSameMonth(): iterable
     {
         $firstDays = [1, 8, 13, 15, 18, 25];
@@ -859,6 +864,7 @@ class DateTimeTest extends TestCase
         }
     }
 
+    /** A selection of days not in the same month. */
     public static function daysInDifferentMonths(): iterable
     {
         $utc = TimeZone::lookup("UTC");
@@ -887,6 +893,7 @@ class DateTimeTest extends TestCase
         }
     }
 
+    /** A selection of hours in the same day. */
     public static function hoursInSameDay(): iterable
     {
         $firstHours = [1, 8, 13, 15, 18, 23];
@@ -907,6 +914,7 @@ class DateTimeTest extends TestCase
         }
     }
 
+    /** A selection of DateTimes in not in the same day. */
     public static function timesInDifferentDays(): iterable
     {
         $utc = TimeZone::lookup("UTC");
@@ -965,7 +973,11 @@ class DateTimeTest extends TestCase
         ];
 
         // One day to use for each hour in the test data so that we cover a selection
-        $days = [14, 19, 31, 12, 16, 16, 13, 28, 31, 8, 15, 13, 12, 23, 11, 24, 5, 7, 30, 9, 23, 21, 1, 19];
+        $days = [
+            14, 19, 31, 12, 16, 16, 13, 28, 31, 8,
+            15, 13, 12, 23, 11, 24, 5, 7, 30, 9,
+            23, 21, 1, 19,
+        ];
 
         foreach ([1959, 1983] as $year) {
             for ($hour = 0; $hour < 24; ++$hour) {
@@ -996,7 +1008,11 @@ class DateTimeTest extends TestCase
         ];
 
         // One day to use for each hour in the test data so that we cover a selection
-        $days = [14, 19, 31, 12, 16, 16, 13, 28, 30, 8, 15, 13, 12, 23, 11, 24, 5, 7, 30, 9, 23, 21, 1, 19];
+        $days = [
+            14, 19, 31, 12, 16, 16, 13, 28, 30, 8,
+            15, 13, 12, 23, 11, 24, 5, 7, 30, 9,
+            23, 21, 1, 19,
+        ];
 
         // times at the boundaries between consecutive hours for a post-epoch year and pre-epoch year
         foreach ([1982, 1961] as $year) {
@@ -1042,7 +1058,10 @@ class DateTimeTest extends TestCase
         $secondSeconds = [1, 8, 13, 16, 22, 31, 34, 41, 42, 58];
 
         /**
-         * One month to use for each hour in the test data so that we cover a selection
+         * One month to use for each minute in the test data so that we cover a selection.
+         *
+         * 20 months repeated 3 times to cover 60 minutes.
+         *
          * @var Month[] $months
          */
         $months = [
@@ -1050,19 +1069,25 @@ class DateTimeTest extends TestCase
             Month::August, Month::August, Month::November, Month::December, Month::December,
             Month::November, Month::January, Month::November, Month::March, Month::February,
             Month::August, Month::November, Month::June, Month::August, Month::January,
-            Month::June, Month::January, Month::November, Month::September,
         ];
 
-        // One day to use for each hour in the test data so that we cover a selection
-        $days = [20, 29, 21, 23, 15, 19, 23, 23, 4, 1, 18, 8, 7, 10, 3, 1, 15, 19, 26, 27, 17, 14, 24, 15];
+        // One day to use for each minute in the test data so that we cover a selection (20 repeated 3 times)
+        $days = [
+            23, 20, 23, 29, 28, 16, 2, 13, 10, 24,
+            24, 19, 14, 19, 9, 17, 25, 30, 1, 13,
+        ];
+
+        // One hour to use for each minute in the test data so that we cover a selection (20 repeated 3 times)
+        $hours = [
+            13, 18, 1, 20, 9, 15, 17, 18, 22, 11,
+            10, 18, 5, 20, 0, 8, 10, 4, 18, 18,
+        ];
 
         foreach ([1947, 2006] as $year) {
-            for ($hour = 0; $hour < 24; ++$hour) {
-                for ($minute = 0; $minute < 60; $minute += 5) {
-                    foreach ($firstSeconds as $firstSecond) {
-                        foreach ($secondSeconds as $secondSecond) {
-                            yield [$year, $months[$hour], $days[$hour], $hour, $minute, $firstSecond, $secondSecond];
-                        }
+            for ($minute = 0; $minute < 60; $minute += 5) {
+                foreach ($firstSeconds as $firstSecond) {
+                    foreach ($secondSeconds as $secondSecond) {
+                        yield [$year, $months[$minute % 20], $days[$minute % 20], $hours[$minute % 20], $minute, $firstSecond, $secondSecond];
                     }
                 }
             }
@@ -1075,7 +1100,10 @@ class DateTimeTest extends TestCase
         $utc = TimeZone::lookup("UTC");
 
         /**
-         * One month to use for each hour in the test data so that we cover a selection
+         * One month to use for each minute in the test data so that we cover a selection
+         *
+         * 20 months repeated 3 times to cover 60 minutes.
+         *
          * @var Month[] $months
          */
         $months = [
@@ -1083,22 +1111,28 @@ class DateTimeTest extends TestCase
             Month::November, Month::March, Month::February, Month::April, Month::October,
             Month::November, Month::October, Month::March, Month::June, Month::February,
             Month::May, Month::March, Month::April, Month::December, Month::November,
-            Month::March, Month::June, Month::September, Month::February,
         ];
 
-        // One day to use for each hour in the test data so that we cover a selection
-        $days = [1, 23, 1, 7, 24, 9, 22, 6, 30, 27, 27, 3, 23, 25, 21, 31, 5, 26, 14, 24, 20, 5, 19, 12];
+        // One day to use for each minute in the test data so that we cover a selection (20 repeated 3 times)
+        $days = [
+            8, 8, 10, 21, 8, 16, 17, 22, 19, 12,
+            13, 19, 25, 13, 1, 29, 24, 21, 5, 18,
+        ];
+
+        // One hour to use for each minute in the test data so that we cover a selection (20 repeated 3 times)
+        $hours = [
+            17, 16, 8, 11, 1, 20, 6, 1, 5, 6,
+            12, 14, 9, 8, 17, 6, 17, 20, 22, 5,
+        ];
 
         // times at the boundaries between consecutive minutes for a post-epoch year and pre-epoch year
         foreach ([1989, 1966] as $year) {
-            for ($hour = 0; $hour < 23; ++$hour) {
-                for ($minute = 0; $minute < 59; $minute += 5) {
-                    $first = DateTime::create($year, $months[$hour], $days[$hour], $hour, $minute, 59, 999, $utc);
-                    $second = DateTime::create($year, $months[$hour], $days[$hour], $hour, $minute + 1, 0, 0, $utc);
+            for ($minute = 0; $minute < 59; ++$minute) {
+                $first = DateTime::create($year, $months[$minute % 20], $days[$minute % 20], $hours[$minute % 20], $minute, 59, 999, $utc);
+                $second = DateTime::create($year, $months[$minute % 20], $days[$minute % 20], $hours[$minute % 20], $minute + 1, 0, 0, $utc);
 
-                    // end of 2300 and start of 0000 the next day
-                    yield sprintf("%04d-%s-%02d-%02d:%02d:59.999-and-%02d:%02d:00.000", $year, $months[$hour]->name, $days[$hour], $hour, $minute, $hour, $minute + 1) => [$first, $second];
-                }
+                // end of 2300 and start of 0000 the next day
+                yield sprintf("%04d-%s-%02d-%02d:%02d:59.999-and-%02d:%02d:00.000", $year, $months[$minute % 20]->name, $days[$minute % 20], $hours[$minute % 20], $minute, $hours[$minute % 20], $minute + 1) => [$first, $second];
             }
 
             yield sprintf("%04d-March-9-23:59:59.000-and-%04d-March-10-00:00:00.000", $year, $year + 1) => [
@@ -1124,6 +1158,134 @@ class DateTimeTest extends TestCase
             yield sprintf("%02d:%02d-%s-in-%04d-and-%04d", 8, 38, $month->name, 1948, 1979) => [
                 DateTime::create(1948, $month, 11, 8, 38, 51, 15, $utc),
                 DateTime::create(1979, $month, 11, 8, 38, 5, 332, $utc),
+            ];
+        }
+    }
+
+    /** Selection of date-times in the same second. */
+    public static function timesInSameSecond(): iterable
+    {
+        $firstMilliseconds = [
+            0, 34, 88, 150, 226, 268, 328, 392, 447, 525,
+            580, 663, 728, 813, 869, 899, 947, 999,
+        ];
+
+        $secondMilliseconds = [
+            0, 64, 100, 172, 232, 270, 337, 387, 453, 521,
+            577, 647, 715, 775, 827, 887, 948, 999,
+        ];
+
+        /**
+         * One month to use for each second in the test data so that we cover a selection.
+         *
+         * 20 months repeated 3 times to cover 60 seconds.
+         *
+         * @var Month[] $months
+         */
+        $months = [
+            Month::May, Month::November, Month::March, Month::December, Month::July,
+            Month::February, Month::September, Month::November, Month::April, Month::September,
+            Month::February, Month::April, Month::April, Month::May, Month::November,
+            Month::February, Month::June, Month::July, Month::May, Month::July,
+        ];
+
+        // One day to use for each second in the test data so that we cover a selection (20 repeated 3 times)
+        $days = [
+            3, 14, 22, 28, 8, 23, 9, 19, 29, 12,
+            10, 20, 20, 3, 7, 25, 28, 31, 2, 5,
+        ];
+
+        // One hour to use for each second in the test data so that we cover a selection (20 repeated 3 times)
+        $hours = [
+            20, 21, 23, 18, 12, 10, 18, 12, 17, 19,
+            5, 18, 18, 2, 4, 8, 19, 7, 8, 7,
+        ];
+
+        // One minute to use for each second in the test data so that we cover a selection (20 repeated 3 times)
+        $minutes = [
+            24, 59, 34, 5, 56, 11, 30, 27, 20, 44,
+            45, 57, 33, 48, 4, 12, 14, 16, 4, 32,
+        ];
+
+        // one pre- and one post-epoch year
+        foreach ([1947, 2006] as $year) {
+            for ($second = 0; $second < 60; ++$second) {
+                foreach ($firstMilliseconds as $firstMillisecond) {
+                    foreach ($secondMilliseconds as $secondMillisecond) {
+                        yield [$year, $months[$second % 20], $days[$second % 20], $hours[$second % 20], $minutes[$second % 20], $second, $firstMillisecond, $secondMillisecond];
+                    }
+                }
+            }
+        }
+    }
+
+    /** Selection of date-times not in the same second. */
+    public static function timesInDifferentSeconds(): iterable
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        /**
+         * One month to use for each second in the test data so that we cover a selection
+         * @var Month[] $months
+         */
+        $months = [
+            Month::June, Month::January, Month::February, Month::April, Month::January,
+            Month::February, Month::January, Month::December, Month::April, Month::June,
+            Month::October, Month::February, Month::February, Month::June, Month::January,
+            Month::June, Month::November, Month::January, Month::December, Month::November,
+        ];
+
+        // One day to use for each minute in the test data so that we cover a selection (20 repeated 3 times)
+        $days = [
+            1, 23, 1, 7, 24, 9, 22, 6, 30, 27,
+            27, 3, 23, 25, 21, 26, 5, 31, 14, 24,
+        ];
+
+        // One hour to use for each minute in the test data so that we cover a selection (20 repeated 3 times)
+        $hours = [
+            9, 9, 15, 22, 11, 10, 20, 20, 4, 7,
+            16, 2, 7, 15, 15, 8, 15, 5, 3, 20,
+        ];
+
+        // One minute to use for each second in the test data so that we cover a selection (20 repeated 3 times)
+        $minutes = [
+            30, 42, 14, 38, 24, 59, 27, 44, 16, 39,
+            49, 26, 30, 34, 56, 2, 47, 1, 20, 45,
+        ];
+
+        // times at the boundaries between consecutive seconds for a post-epoch year and pre-epoch year
+        foreach ([1991, 1965] as $year) {
+            for ($second = 0; $second < 59; ++$second) {
+                $firstDateTime = DateTime::create($year, $months[$second % 20], $days[$second % 20], $hours[$second % 20], $minutes[$second % 20], $second, 999, $utc);
+                $secondDateTime = DateTime::create($year, $months[$second % 20], $days[$second % 20], $hours[$second % 20], $minutes[$second % 20], $second + 1, 0, $utc);
+
+                // end of 2300 and start of 0000 the next day
+                yield sprintf("%04d-%s-%02d-%02d:%02d:%02d.999-and-%02d:%02d:%02d.000", $year, $months[$second % 20]->name, $days[$second % 20], $hours[$second % 20], $minutes[$second % 20], $second, $hours[$second % 20], $minutes[$second % 20], $second + 1) => [$firstDateTime, $secondDateTime];
+            }
+
+            yield sprintf("%04d-August-9-23:59:59.000-and-%04d-August-10-00:00:00.000", $year, $year + 1) => [
+                DateTime::create($year, Month::August, 29, 23, 59, 59, 999, $utc),
+                DateTime::create($year, Month::August, 30, 0, 0, 0, 0, $utc),
+            ];
+        }
+
+        // leap year - last second in 29th and first second in 1st
+        yield "leap-year-1988-02-29-23:59:59.999-and-1988-03-01-00:00:00.000" => [
+            DateTime::create(1996, Month::February, 29, 23, 59, 59, 999, $utc),
+            DateTime::create(1996, Month::March, 1, 0, 0, 0, 0, $utc),
+        ];
+
+        // leap year - last minute in 28th and first minute in 29th
+        yield "leap-year-1976-02-28-23:59:59.999-and-1976-02-29-00:00:00.000" => [
+            DateTime::create(1984, Month::February, 28, 23, 59, 59, 999, $utc),
+            DateTime::create(1984, Month::February, 29, 0, 0, 0, 0, $utc),
+        ];
+
+        // same month, day, hour, minute and second, different year
+        foreach (Month::cases() as $month) {
+            yield sprintf("%02d:%02d:%02d-%s-in-%04d-and-%04d", 12, 1, 49, $month->name, 1933, 1989) => [
+                DateTime::create(1933, $month, 21, 12, 1, 49, 15, $utc),
+                DateTime::create(1989, $month, 21, 12, 1, 49, 332, $utc),
             ];
         }
     }
@@ -2617,6 +2779,27 @@ class DateTimeTest extends TestCase
         self::assertFalse($first->isInSameMinuteAs($second));
     }
 
+    /** Ensure times in the same second are detected correctly. */
+    #[DataProvider("timesInSameSecond")]
+    public function testIsInSameSecondAs1(int $year, Month $month, int $day, int $hour, int $minute, int $second, int $millisecond, int $otherMillisecond): void
+    {
+        $utc = TimeZone::lookup("UTC");
+
+        // arbitrary times in the same second
+        self::assertTrue(DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $utc)->isInSameSecondAs(DateTime::create($year, $month, $day, $hour, $minute, $second, $otherMillisecond, $utc)));
+        self::assertTrue(DateTime::create($year, $month, $day, $hour, $minute, $second, $otherMillisecond, $utc)->isInSameSecondAs(DateTime::create($year, $month, $day, $hour, $minute, $second, $millisecond, $utc)));
+    }
+
+    /** Ensure times in different seconds are detected correctly. */
+    #[DataProvider("timesInDifferentSeconds")]
+    #[DataProvider("timesInDifferentMinutes")]
+    #[DataProvider("timesInDifferentHours")]
+    #[DataProvider("timesInDifferentDays")]
+    public function testIsInSameSecondAs2(DateTime $first, DateTime $second): void
+    {
+        self::assertFalse($first->isInSameSecondAs($second));
+    }
+
     // TODO millisecondsBeforeEpoch()
     // TODO millisecondsAfterEpoch()
     // TODO syncGregorianDecrementHour()
@@ -2624,5 +2807,4 @@ class DateTimeTest extends TestCase
     // TODO syncGregorianPostEpoch()
     // TODO syncGregorianPreEpoch()
     // TODO syncGregorian()
-    // TODO isInSameSecondAs()
 }
