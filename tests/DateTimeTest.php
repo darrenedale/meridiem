@@ -8,6 +8,7 @@ use DateTimeImmutable as PhpDateTimeImmutable;
 use DateTimeZone as PhpDateTimeZone;
 use Equit\XRay\StaticXRay;
 use Equit\XRay\XRay;
+use LogicException;
 use Meridiem\Contracts\DateTime as DateTimeContract;
 use Meridiem\DateTime;
 use Meridiem\GregorianRatios;
@@ -2800,7 +2801,35 @@ class DateTimeTest extends TestCase
         self::assertFalse($first->isInSameSecondAs($second));
     }
 
-    // TODO millisecondsBeforeEpoch()
+    /** A selection of DateTime objects and the expected number of ms they are before the epoch. */
+    public static function dateTimesAndMillisecondsBeforeEpoch(): iterable
+    {
+        yield "1ms-before-epoch" => [DateTime::create(1969, Month::December, 31,  23, 59, 59, 999), 1];
+        yield "1s-before-epoch" => [DateTime::create(1969, Month::December, 31,  23, 59, 59), 1000];
+        yield "leap-year-before-epoch" => [DateTime::create(1968, Month::February, 28,  23, 59, 59), 58060801000];
+        yield "several-leap-years-before-epoch" => [DateTime::create(1959, Month::September, 11,  18, 32, 15), 325229265000];
+    }
+
+    /** Ensure we calculate the ms before the epoch correctly. */
+    #[DataProvider("dateTimesAndMillisecondsBeforeEpoch")]
+    public function testMillisecondsBeforeEpoch1(DateTime $testDateTime, int $expected): void
+    {
+        self::assertSame($expected, (new XRay($testDateTime))->millisecondsBeforeEpoch());
+    }
+
+    /** Ensure millisecondsBeforeEpoch() asserts the DateTime is before the epoch. */
+    public function testMillisecondsBeforeEpoch2(): void
+    {
+        if (!$this->phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage("Expected DateTime to be before the epoch");
+
+        (new XRay(DateTime::create(1970, Month::January, 1)))->millisecondsBeforeEpoch();
+    }
+
     // TODO millisecondsAfterEpoch()
     // TODO syncGregorianDecrementHour()
     // TODO syncGregorianIncrementHour()

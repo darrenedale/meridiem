@@ -155,10 +155,18 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     {
         $epoch = UnixEpoch::dateTime();
         assert($this->isGregorianClean(), new LogicException("Expected DateTime to be Gregorian clean"));
-        assert(0 < $epoch->compareGregorian($this));
+        assert(0 < $epoch->compareGregorian($this), new LogicException("Expected DateTime to be before the epoch"));
 
         $milliseconds = ($epoch->year - 1 - $this->year) * GregorianRatios::MillisecondsPerYear;
 
+        // add a day for each leap year between the dates (except the current year)
+        for ($year = $epoch->year - 1; $year > $this->year; --$year) {
+            if (self::isLeapYear($year)) {
+                $milliseconds += GregorianRatios::MillisecondsPerDay;
+            }
+        }
+
+        // these dayCount() calls accommodate account for the leap day if the current year is a leap year
         for ($month = $this->month->value + 1; $month <= Month::December->value; ++$month) {
             $milliseconds += GregorianRatios::MillisecondsPerDay * Month::from($month)->dayCount($this->year);
         }
@@ -168,18 +176,6 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
         $milliseconds += GregorianRatios::MillisecondsPerMinute * (self::MaxMinute - $this->minute);
         $milliseconds += GregorianRatios::MillisecondsPerSecond * (self::MaxSecond - $this->second);
         $milliseconds += GregorianRatios::MillisecondsPerSecond - $this->millisecond;
-
-        // add a day for each leap year between the dates
-        for ($year = $epoch->year - 1; $year > $this->year; --$year) {
-            if (self::isLeapYear($year)) {
-                $milliseconds += GregorianRatios::MillisecondsPerDay;
-            }
-        }
-        
-        // and the to year, if the date is before 29th Feb
-        if (self::isLeapYear($this->year) && ($this->month->isBefore(Month::February) || (Month::February === $this->month && $this->day < 29))) {
-            $milliseconds += GregorianRatios::MillisecondsPerDay;
-        }
 
         return $milliseconds - $this->timeZone->offset($this)->offsetMilliseconds();
     }
