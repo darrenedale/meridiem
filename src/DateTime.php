@@ -153,8 +153,8 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     /** Helper for syncUnix() to calculate how many milliseconds a Gregorian date-time is before the epoch. */
     protected final function millisecondsBeforeEpoch(): int
     {
-        $epoch = UnixEpoch::dateTime();
         assert($this->isGregorianClean(), new LogicException("Expected DateTime to be Gregorian clean"));
+        $epoch = UnixEpoch::dateTime();
         assert(0 < $epoch->compareGregorian($this), new LogicException("Expected DateTime to be before the epoch"));
 
         $milliseconds = ($epoch->year - 1 - $this->year) * GregorianRatios::MillisecondsPerYear;
@@ -183,7 +183,9 @@ class DateTime implements DateTimeContract, DateTimeComparisonContract
     /** Helper for syncUnix() to calculate how many milliseconds a Gregorian date-time is after the epoch. */
     protected final function millisecondsAfterEpoch(): int
     {
+        assert($this->isGregorianClean(), new LogicException("Expected DateTime to be Gregorian clean"));
         $epoch = UnixEpoch::dateTime();
+        assert(0 >= $epoch->compareGregorian($this), new LogicException("Expected DateTime to be on or after the epoch"));
 
         // whole years since the epoch
         $milliseconds = ($this->year - $epoch->year) * GregorianRatios::MillisecondsPerYear;

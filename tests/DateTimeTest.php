@@ -1363,6 +1363,89 @@ class DateTimeTest extends TestCase
         yield "999-microseconds" => [373893251.158999, DateTime::create(1981, Month::November, 6, 11, 14, 11, 158)];
     }
 
+    /** A selection of DateTime objects and the expected number of ms they are before the epoch. */
+    public static function dateTimesAndMillisecondsBeforeEpoch(): iterable
+    {
+        yield "1ms-before-epoch" => [DateTime::create(1969, Month::December, 31,  23, 59, 59, 999), 1];
+        yield "1s-before-epoch" => [DateTime::create(1969, Month::December, 31,  23, 59, 59), 1000];
+        yield "leap-year-before-epoch" => [DateTime::create(1968, Month::February, 28,  23, 59, 59), 58060801000];
+        yield "several-leap-years-before-epoch" => [DateTime::create(1959, Month::September, 11,  18, 32, 15), 325229265000];
+    }
+
+    /** A selection of DateTime objects and the expected number of ms they are after the epoch. */
+    public static function dateTimesAndMillisecondsAfterEpoch(): iterable
+    {
+        yield "1ms-after-epoch" => [DateTime::create(1970, Month::January, 1,  0, 0, 0, 1), 1];
+        yield "1s-after-epoch" => [DateTime::create(1970, Month::January, 1,  0, 0, 1, 0), 1000];
+        yield "leap-year-after-epoch" => [DateTime::create(1972, Month::March, 1,  0, 0, 0), 68256000000];
+        yield "several-leap-years-after-epoch" => [DateTime::create(1983, Month::October, 3,  10, 51, 42), 434026302000];
+    }
+
+    /** Test data for DST hour decrement when synchronising Gregorian to timestamp. */
+    public static function dateTimesAndOneHourEarlier(): iterable
+    {
+        // requires no adjustments to any other element, just the hour
+        yield 'simple' => [
+            DateTime::create(1993, Month::September, 18, 12, 33, 41, 833),
+            DateTime::create(1993, Month::September, 18, 11, 33, 41, 833),
+        ];
+
+        yield 'previous-day' => [
+            DateTime::create(1987, Month::May, 12, 0, 21, 18, 701),
+            DateTime::create(1987, Month::May, 11, 23, 21, 18, 701),
+        ];
+
+        yield 'previous-month' => [
+            DateTime::create(2021, Month::April, 1, 0, 10, 27, 555),
+            DateTime::create(2021, Month::March, 31, 23, 10, 27, 555),
+        ];
+
+        yield 'previous-year' => [
+            DateTime::create(2011, Month::January, 1, 0, 51, 38, 482),
+            DateTime::create(2010, Month::December, 31, 23, 51, 38, 482),
+        ];
+
+        yield 'leap-year' => [
+            DateTime::create(2012, Month::March, 1, 0, 33, 8, 399),
+            DateTime::create(2012, Month::February, 29, 23, 33, 8, 399),
+        ];
+    }
+
+    /** Test data for DST hour decrement when synchronising Gregorian to timestamp. */
+    public static function dateTimesAndOneHourLater(): iterable
+    {
+        // requires no adjustments to any other element, just the hour
+        yield 'simple' => [
+            DateTime::create(1993, Month::September, 18, 12, 33, 41, 119),
+            DateTime::create(1993, Month::September, 18, 13, 33, 41, 119),
+        ];
+
+        yield 'next-day' => [
+            DateTime::create(1987, Month::May, 12, 23, 27, 22, 271),
+            DateTime::create(1987, Month::May, 13, 0, 27, 22, 271),
+        ];
+
+        yield 'next-month' => [
+            DateTime::create(2021, Month::November, 30, 23, 1, 39, 334),
+            DateTime::create(2021, Month::December, 1, 0, 1, 39, 334),
+        ];
+
+        yield 'next-year' => [
+            DateTime::create(2007, Month::December, 31, 23, 30, 4, 515),
+            DateTime::create(2008, Month::January, 1, 0, 30, 4, 515),
+        ];
+
+        yield 'leap-year-next-month' => [
+            DateTime::create(2008, Month::February, 29, 23, 46, 51, 598),
+            DateTime::create(2008, Month::March, 1, 0, 46, 51, 598),
+        ];
+
+        yield 'leap-year-to-29th' => [
+            DateTime::create(1996, Month::February, 28, 23, 52, 7, 725),
+            DateTime::create(1996, Month::February, 29, 0, 52, 7, 725),
+        ];
+    }
+
     /**
      * Ensure we can create accurate DateTime instances from date-time components.
      *
@@ -2801,15 +2884,6 @@ class DateTimeTest extends TestCase
         self::assertFalse($first->isInSameSecondAs($second));
     }
 
-    /** A selection of DateTime objects and the expected number of ms they are before the epoch. */
-    public static function dateTimesAndMillisecondsBeforeEpoch(): iterable
-    {
-        yield "1ms-before-epoch" => [DateTime::create(1969, Month::December, 31,  23, 59, 59, 999), 1];
-        yield "1s-before-epoch" => [DateTime::create(1969, Month::December, 31,  23, 59, 59), 1000];
-        yield "leap-year-before-epoch" => [DateTime::create(1968, Month::February, 28,  23, 59, 59), 58060801000];
-        yield "several-leap-years-before-epoch" => [DateTime::create(1959, Month::September, 11,  18, 32, 15), 325229265000];
-    }
-
     /** Ensure we calculate the ms before the epoch correctly. */
     #[DataProvider("dateTimesAndMillisecondsBeforeEpoch")]
     public function testMillisecondsBeforeEpoch1(DateTime $testDateTime, int $expected): void
@@ -2830,9 +2904,70 @@ class DateTimeTest extends TestCase
         (new XRay(DateTime::create(1970, Month::January, 1)))->millisecondsBeforeEpoch();
     }
 
-    // TODO millisecondsAfterEpoch()
-    // TODO syncGregorianDecrementHour()
-    // TODO syncGregorianIncrementHour()
+    /** Ensure millisecondsBeforeEpoch() asserts the DateTime is Gregorian clean. */
+    public function testMillisecondsBeforeEpoch3(): void
+    {
+        if (!$this->phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage("Expected DateTime to be Gregorian clean");
+
+        // 2025-09-20T11:35:52.000Z
+        (new XRay(DateTime::fromUnixTimestamp(1758368152)))->millisecondsBeforeEpoch();
+    }
+
+    /** Ensure we calculate the ms before the epoch correctly. */
+    #[DataProvider("dateTimesAndMillisecondsAfterEpoch")]
+    public function testMillisecondsAfterEpoch1(DateTime $testDateTime, int $expected): void
+    {
+        self::assertSame($expected, (new XRay($testDateTime))->millisecondsAfterEpoch());
+    }
+
+    /** Ensure millisecondsBeforeEpoch() asserts the DateTime is before the epoch. */
+    public function testMillisecondsAfterEpoch2(): void
+    {
+        if (!$this->phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage("Expected DateTime to be on or after the epoch");
+
+        (new XRay(DateTime::create(1969, Month::December, 31, 23, 59, 59, 999)))->millisecondsAfterEpoch();
+    }
+
+    /** Ensure millisecondsAfterEpoch() asserts the DateTime is Gregorian clean. */
+    public function testMillisecondsAfterEpoch3(): void
+    {
+        if (!$this->phpAssertionsActive()) {
+            self::markTestSkipped("PHP assertions must be active for this test");
+        }
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage("Expected DateTime to be Gregorian clean");
+
+        // 2025-09-20T11:35:52.000Z
+        (new XRay(DateTime::fromUnixTimestamp(1758368152)))->millisecondsAfterEpoch();
+    }
+
+    /** Ensure the helper to safely decrement the hour for DST adjustments during sync works as expected. */
+    #[DataProvider("dateTimesAndOneHourEarlier")]
+    public function testSyncGregorianDecrementHour1(DateTime $testDateTime, DateTime $expected): void
+    {
+        (new XRay($testDateTime))->syncGregorianDecrementHour();
+        self::assertEquals($expected, $testDateTime);
+    }
+
+    /** Ensure the helper to safely increment the hour for DST adjustments during sync works as expected. */
+    #[DataProvider("dateTimesAndOneHourLater")]
+    public function testSyncGregorianIncrementHour1(DateTime $testDateTime, DateTime $expected): void
+    {
+        (new XRay($testDateTime))->syncGregorianIncrementHour();
+        self::assertEquals($expected, $testDateTime);
+    }
+
     // TODO syncGregorianPostEpoch()
     // TODO syncGregorianPreEpoch()
     // TODO syncGregorian()
