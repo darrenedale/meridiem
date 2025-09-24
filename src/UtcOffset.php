@@ -3,6 +3,7 @@
 namespace Meridiem;
 
 use InvalidArgumentException;
+use RuntimeException;
 
 /** Representation of an offset from UTC.*/
 class UtcOffset
@@ -14,8 +15,8 @@ class UtcOffset
     public function __construct(int $hours, int $minutes)
     {
         // 0 hours or 0 minutes are compatible whatever the other arg is; otherwise, the signs must be the same
-        assert(0 === $hours || 0 === $minutes || (0 > $hours === 0 > $minutes), new InvalidArgumentException("Expected hours and minutes with compatible signed, found {$hours} and {$minutes}"));
-        assert(-60 < $minutes && 60 > $minutes, new InvalidArgumentException("Expected minutes between -59 and 59 inclusive, found {$minutes}"));
+        assert(0 === $hours || 0 === $minutes || (0 > $hours === 0 > $minutes), new RuntimeException("Expected hours and minutes with compatible signs, found {$hours} and {$minutes}"));
+        assert(-60 < $minutes && 60 > $minutes, new RuntimeException("Expected minutes between -59 and 59 inclusive, found {$minutes}"));
 
         $this->hours = $hours;
         $this->minutes = $minutes;
@@ -55,7 +56,7 @@ class UtcOffset
     public static function parse(string $offset): self
     {
         if (!preg_match("/^([+-])(\d{2}):?(\d{2})\$/", $offset, $captures)) {
-            throw new InvalidArgumentException("Expected valid timezone offset, found \"{$offset}\"");
+            throw new RuntimeException("Expected valid timezone offset, found \"{$offset}\"");
         }
 
         [, $sign, $hours, $minutes] = $captures;
